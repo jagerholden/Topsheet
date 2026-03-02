@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Topsheet — Solidarity</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  :root {
+    --dark-olive: #3D4A2A;
+    --lime: #D4E157;
+    --cream: #F5F0E8;
+    --char: #2C2C2C;
+    --olive: #6B7A4F;
+    --muted: #8A9A6D;
+    --light-lime: #E8ED8A;
+    --white: #FFFFFF;
+    --black: #1A1A1A;
+    --div: #C8C0B4;
+    --serif: 'Playfair Display', Georgia, serif;
+    --sans: 'DM Sans', 'Helvetica Neue', sans-serif;
+    --mono: 'JetBrains Mono', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    min-height: 100vh;
+    background: var(--cream);
+    font-family: var(--sans);
+    color: var(--char);
+  }
+
+  .header {
+    background: var(--dark-olive);
+    padding: 18px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .header-mark {
+    width: 24px;
+    height: 24px;
+    background: var(--black);
+    border-radius: 2px;
+  }
+  .header-name {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--white);
+    letter-spacing: 0.05em;
+  }
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .header-email {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--light-lime);
+    opacity: 0.7;
+  }
+  .btn-sign-out {
+    font-family: var(--sans);
+    font-size: 11px;
+    font-weight: 500;
+    padding: 5px 12px;
+    background: transparent;
+    color: var(--light-lime);
+    border: 1px solid rgba(232, 237, 138, 0.27);
+    border-radius: 2px;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+  }
+  .btn-sign-out:hover { opacity: 1; }
+
+  .main {
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 48px 32px;
+  }
+
+  h1 {
+    font-family: var(--serif);
+    font-size: 52px;
+    font-weight: 400;
+    color: var(--dark-olive);
+    margin: 0 0 6px;
+    line-height: 1.05;
+  }
+
+  .date-line {
+    font-size: 14px;
+    color: var(--olive);
+    margin: 0 0 40px;
+  }
+
+  /* Auth gate */
+  .auth-gate {
+    background: var(--white);
+    border: 1px solid var(--div);
+    border-radius: 4px;
+    padding: 40px 32px;
+    text-align: center;
+  }
+  .auth-gate p { margin: 0 0 8px; font-size: 15px; }
+  .auth-gate .subtitle { font-size: 12px; color: var(--olive); margin: 0 0 24px; }
+
+  .btn {
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 600;
+    padding: 14px 28px;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .btn:hover { opacity: 0.9; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-primary { background: var(--dark-olive); color: var(--white); }
+  .btn-lime { background: var(--lime); color: var(--dark-olive); }
+  .btn-google {
+    font-size: 15px;
+    padding: 14px 36px;
+    background: var(--dark-olive);
+    color: var(--white);
+  }
+
+  .button-row {
+    display: flex;
+    gap: 14px;
+    margin-bottom: 40px;
+  }
+
+  /* Progress */
+  .progress-box {
+    background: var(--white);
+    border: 1px solid var(--div);
+    border-radius: 4px;
+    padding: 20px;
+    margin-bottom: 24px;
+  }
+  .progress-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .progress-msg { font-size: 13px; font-weight: 500; }
+  .progress-pct { font-family: var(--mono); font-size: 12px; color: var(--olive); font-weight: 600; }
+  .progress-bar {
+    height: 6px;
+    background: var(--cream);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--dark-olive);
+    border-radius: 3px;
+    transition: width 0.4s ease;
+  }
+  .progress-fill.indeterminate {
+    animation: indeterminate 1.8s ease-in-out infinite;
+  }
+  .progress-sub {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--div);
+    margin-top: 8px;
+  }
+
+  @keyframes indeterminate {
+    0% { width: 5%; margin-left: 0; }
+    50% { width: 35%; margin-left: 40%; }
+    100% { width: 5%; margin-left: 95%; }
+  }
+
+  .error-box {
+    background: #FEE2E2;
+    border: 1px solid #FECACA;
+    padding: 12px 16px;
+    border-radius: 3px;
+    margin-bottom: 24px;
+    font-size: 13px;
+    color: #991B1B;
+  }
+
+  .info-box {
+    background: rgba(61,74,42,0.04);
+    border-left: 3px solid var(--lime);
+    padding: 14px 18px;
+    margin-bottom: 24px;
+    border-radius: 0 3px 3px 0;
+    font-size: 13px;
+  }
+
+  /* Summary bar */
+  .summary-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: var(--dark-olive);
+    border-radius: 3px;
+    margin-bottom: 24px;
+    color: var(--white);
+    font-size: 13px;
+  }
+  .summary-bar .tag {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--light-lime);
+    opacity: 0.6;
+  }
+
+  /* Email card */
+  .email-card {
+    margin-bottom: 28px;
+    padding-bottom: 28px;
+    border-bottom: 1px solid var(--div);
+  }
+  .email-counter {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--div);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .badge-important {
+    font-family: var(--sans);
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--dark-olive);
+    background: rgba(212, 225, 87, 0.33);
+    padding: 2px 7px;
+    border-radius: 2px;
+    letter-spacing: 0.04em;
+  }
+  .email-subject {
+    font-family: var(--serif);
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--dark-olive);
+    margin-bottom: 12px;
+    line-height: 1.3;
+    outline: none;
+    border-bottom: 1px dashed rgba(200,192,180,0.33);
+    padding-bottom: 4px;
+    cursor: text;
+  }
+  .meta-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 3px;
+    align-items: baseline;
+  }
+  .meta-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--olive);
+    letter-spacing: 0.05em;
+    min-width: 44px;
+    text-transform: uppercase;
+  }
+  .meta-value {
+    font-size: 12px;
+    color: var(--char);
+  }
+  .meta-value[contenteditable] {
+    outline: none;
+    border-bottom: 1px dashed rgba(200,192,180,0.27);
+    flex: 1;
+    cursor: text;
+  }
+  .email-body {
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--char);
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin-top: 14px;
+    padding: 10px 12px;
+    background: var(--white);
+    border-radius: 3px;
+    border: 1px solid rgba(200,192,180,0.27);
+    outline: none;
+    cursor: text;
+    min-height: 40px;
+    max-height: 300px;
+    overflow-y: auto;
+  }
+  .attachments {
+    margin-top: 10px;
+  }
+  .att-label {
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--olive);
+    letter-spacing: 0.05em;
+  }
+  .att-item {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--olive);
+    margin-top: 3px;
+  }
+
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-left">
+    <div class="header-mark"></div>
+    <span class="header-name">Solidarity</span>
+  </div>
+  <div class="header-right">
+    <span class="header-email" id="userEmail"></span>
+    <button class="btn-sign-out hidden" id="btnSignOut" onclick="signOut()">Sign Out</button>
+  </div>
+</div>
+
+<!-- Main -->
+<div class="main">
+  <h1>Topsheet</h1>
+  <p class="date-line" id="todayLine"></p>
+
+  <!-- Auth Gate -->
+  <div class="auth-gate" id="authGate">
+    <p>Sign in with your Solidarity Google account to pull today's emails.</p>
+    <p class="subtitle">Read-only access. Nothing is sent, modified, or deleted.</p>
+    <button class="btn btn-google" onclick="signIn()">Sign in with Google</button>
+  </div>
+
+  <!-- App (hidden until authenticated) -->
+  <div class="hidden" id="appContent">
+    <div class="hidden" id="progressBox" class="progress-box">
+      <!-- filled dynamically -->
+    </div>
+    <div class="hidden" id="errorBox"></div>
+
+    <div class="button-row">
+      <button class="btn btn-primary" id="btnPull" onclick="pullEmails()">Pull Today's Emails</button>
+      <button class="btn btn-lime hidden" id="btnDownload" onclick="downloadDocx()">Download .docx</button>
+    </div>
+
+    <div class="hidden" id="summaryBar"></div>
+    <div id="emailList"></div>
+  </div>
+</div>
+
+<!-- docx library -->
+<script src="https://cdn.jsdelivr.net/npm/docx@9.1.1/build/index.umd.min.js"></script>
+
+<script>
+// ─── Config ─────────────────────────────────────────
+const CLIENT_ID = '281918788023-vrovhri278b75412kpmla9h1r28dbtde.apps.googleusercontent.com';
+const SCOPES = 'https://www.googleapis.com/auth/gmail.readonly';
+const GMAIL_QUERY = 'is:unread -category:promotions -category:updates -category:forums -category:social newer_than:1d -in:sent';
+
+let accessToken = null;
+let emails = [];
+let tokenClient = null;
+
+// ─── Init ───────────────────────────────────────────
+document.getElementById('todayLine').textContent = new Date().toLocaleDateString('en-US', {
+  weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+});
+
+window.onload = function() {
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: SCOPES,
+    callback: handleAuthResponse,
+  });
+};
+
+function handleAuthResponse(response) {
+  if (response.access_token) {
+    accessToken = response.access_token;
+    document.getElementById('authGate').classList.add('hidden');
+    document.getElementById('appContent').classList.remove('hidden');
+    document.getElementById('btnSignOut').classList.remove('hidden');
+
+    fetch('https://www.googleapis.com/gmail/v1/users/me/profile', {
+      headers: { Authorization: 'Bearer ' + accessToken }
+    })
+    .then(r => r.json())
+    .then(d => { document.getElementById('userEmail').textContent = d.emailAddress || ''; })
+    .catch(() => {});
+  }
+}
+
+function signIn() { tokenClient.requestAccessToken(); }
+
+function signOut() {
+  if (accessToken) {
+    fetch('https://oauth2.googleapis.com/revoke?token=' + accessToken, { method: 'POST' }).catch(() => {});
+  }
+  accessToken = null;
+  emails = [];
+  document.getElementById('authGate').classList.remove('hidden');
+  document.getElementById('appContent').classList.add('hidden');
+  document.getElementById('btnSignOut').classList.add('hidden');
+  document.getElementById('userEmail').textContent = '';
+  document.getElementById('emailList').innerHTML = '';
+  document.getElementById('summaryBar').classList.add('hidden');
+  document.getElementById('btnDownload').classList.add('hidden');
+}
+
+// ─── Helpers ────────────────────────────────────────
+function parseSender(raw) {
+  if (!raw) return { name: '', email: '' };
+  const m = raw.match(/^(.*?)\s*<(.+?)>$/);
+  if (m) return { name: m[1].trim().replace(/^"|"$/g, ''), email: m[2] };
+  return { name: '', email: raw.trim() };
+}
+
+function fmtDate(ts) {
+  if (!ts) return '';
+  return new Date(parseInt(ts)).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function fmtTime(ts) {
+  if (!ts) return '';
+  return new Date(parseInt(ts)).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+}
+
+function cleanBody(body) {
+  if (!body) return '';
+  return body
+    .replace(/https?:\/\/[^\s\r\n]+/g, '[link]')
+    .replace(/\r\n/g, '\n').replace(/\n{4,}/g, '\n\n\n')
+    .replace(/You are receiving this email because.*$/s, '')
+    .replace(/Forwarding this invitation could.*$/s, '')
+    .replace(/Learn more \[link\].*$/s, '')
+    .trim().substring(0, 3000);
+}
+
+function getHeader(headers, name) {
+  if (!headers) return '';
+  const h = headers.find(x => x.name.toLowerCase() === name.toLowerCase());
+  return h ? h.value : '';
+}
+
+function decodeBody(payload) {
+  if (!payload) return '';
+  if (payload.body && payload.body.data) {
+    try { return atob(payload.body.data.replace(/-/g, '+').replace(/_/g, '/')); } catch { return ''; }
+  }
+  if (payload.parts) {
+    for (const part of payload.parts) {
+      if (part.mimeType === 'text/plain' && part.body && part.body.data) {
+        try { return atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/')); } catch { continue; }
+      }
+    }
+    for (const part of payload.parts) {
+      if (part.parts) { const n = decodeBody(part); if (n) return n; }
+    }
+    for (const part of payload.parts) {
+      if (part.mimeType === 'text/html' && part.body && part.body.data) {
+        try {
+          const html = atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/'));
+          const doc = new DOMParser().parseFromString(html, 'text/html');
+          return doc.body ? doc.body.textContent : '';
+        } catch { continue; }
+      }
+    }
+  }
+  return '';
+}
+
+function getAttachments(payload) {
+  const att = [];
+  if (!payload) return att;
+  function walk(p) {
+    if (p.filename && p.filename.length > 0 && p.body && p.body.size > 0) {
+      att.push({ filename: p.filename, mimeType: p.mimeType || 'file', size: p.body.size });
+    }
+    if (p.parts) p.parts.forEach(walk);
+  }
+  walk(payload);
+  return att;
+}
+
+// ─── Progress UI ────────────────────────────────────
+function showProgress(msg, current, total) {
+  const box = document.getElementById('progressBox');
+  const pct = total > 0 ? Math.round((current / total) * 100) : 0;
+  box.className = 'progress-box';
+  box.classList.remove('hidden');
+  box.innerHTML = `
+    <div class="progress-top">
+      <span class="progress-msg">${msg}</span>
+      ${total > 0 ? `<span class="progress-pct">${pct}%</span>` : ''}
+    </div>
+    <div class="progress-bar">
+      <div class="progress-fill ${total === 0 ? 'indeterminate' : ''}" style="${total > 0 ? 'width:' + pct + '%' : ''}"></div>
+    </div>
+    ${total > 0 ? `<div class="progress-sub">${current} of ${total} emails read</div>` : '<div class="progress-sub">This usually takes 15–45 seconds.</div>'}
+  `;
+}
+
+function hideProgress() {
+  document.getElementById('progressBox').classList.add('hidden');
+}
+
+function showError(msg) {
+  const box = document.getElementById('errorBox');
+  box.className = 'error-box';
+  box.classList.remove('hidden');
+  box.textContent = msg;
+}
+
+function hideError() {
+  document.getElementById('errorBox').classList.add('hidden');
+}
+
+// ─── Pull Emails ────────────────────────────────────
+async function pullEmails() {
+  if (!accessToken) return;
+  emails = [];
+  document.getElementById('emailList').innerHTML = '';
+  document.getElementById('summaryBar').classList.add('hidden');
+  document.getElementById('btnDownload').classList.add('hidden');
+  document.getElementById('btnPull').disabled = true;
+  document.getElementById('btnPull').textContent = 'Pulling...';
+  hideError();
+  showProgress('Searching Primary inbox...', 0, 0);
+
+  try {
+    // Step 1: Search
+    const listRes = await fetch(
+      'https://www.googleapis.com/gmail/v1/users/me/messages?q=' + encodeURIComponent(GMAIL_QUERY) + '&maxResults=50',
+      { headers: { Authorization: 'Bearer ' + accessToken } }
+    );
+    const listData = await listRes.json();
+
+    if (listData.error) {
+      if (listData.error.code === 401) { signOut(); showError('Session expired. Please sign in again.'); return; }
+      throw new Error(listData.error.message);
+    }
+
+    const ids = listData.messages || [];
+    if (ids.length === 0) {
+      hideProgress();
+      document.getElementById('progressBox').className = 'info-box';
+      document.getElementById('progressBox').classList.remove('hidden');
+      document.getElementById('progressBox').textContent = 'No unread Primary emails found for today.';
+      document.getElementById('btnPull').disabled = false;
+      document.getElementById('btnPull').textContent = 'Pull Today\'s Emails';
+      return;
+    }
+
+    showProgress('Found ' + ids.length + ' emails. Reading...', 0, ids.length);
+
+    // Step 2: Read each
+    for (let i = 0; i < ids.length; i++) {
+      showProgress('Reading ' + (i + 1) + '/' + ids.length + '...', i + 1, ids.length);
+
+      const msgRes = await fetch(
+        'https://www.googleapis.com/gmail/v1/users/me/messages/' + ids[i].id + '?format=full',
+        { headers: { Authorization: 'Bearer ' + accessToken } }
+      );
+      const msg = await msgRes.json();
+      const headers = msg.payload ? msg.payload.headers || [] : [];
+
+      emails.push({
+        id: ids[i].id,
+        from: getHeader(headers, 'From'),
+        to: getHeader(headers, 'To'),
+        cc: getHeader(headers, 'Cc'),
+        subject: getHeader(headers, 'Subject'),
+        body: cleanBody(decodeBody(msg.payload)),
+        date: msg.internalDate,
+        dateFormatted: fmtDate(msg.internalDate) + ' at ' + fmtTime(msg.internalDate),
+        attachments: getAttachments(msg.payload),
+        important: (msg.labelIds || []).includes('IMPORTANT'),
+      });
+    }
+
+    hideProgress();
+    renderEmails();
+  } catch (err) {
+    hideProgress();
+    showError(err.message || 'Failed to fetch emails');
+  }
+
+  document.getElementById('btnPull').disabled = false;
+  document.getElementById('btnPull').textContent = 'Pull Today\'s Emails';
+}
+
+// ─── Render Emails ──────────────────────────────────
+function renderEmails() {
+  if (emails.length === 0) return;
+
+  const impCount = emails.filter(e => e.important).length;
+  const bar = document.getElementById('summaryBar');
+  bar.className = 'summary-bar';
+  bar.classList.remove('hidden');
+  bar.innerHTML = `<span>${emails.length} emails · ${impCount} marked important</span><span class="tag">editable</span>`;
+
+  document.getElementById('btnDownload').classList.remove('hidden');
+
+  const list = document.getElementById('emailList');
+  list.innerHTML = '<p style="font-size:12px;color:var(--olive);margin:0 0 20px;">Edit any field below before downloading. Changes carry into the .docx.</p>';
+
+  emails.forEach((em, i) => {
+    const from = parseSender(em.from);
+    const card = document.createElement('div');
+    card.className = 'email-card';
+
+    let metaHtml = `
+      <div class="meta-row"><span class="meta-label">FROM</span><span class="meta-value" contenteditable onblur="updateEmail(${i},'from',this.textContent)">${escHtml(from.name ? from.name + ' <' + from.email + '>' : from.email)}</span></div>
+      <div class="meta-row"><span class="meta-label">TO</span><span class="meta-value" contenteditable onblur="updateEmail(${i},'to',this.textContent)">${escHtml(em.to)}</span></div>
+    `;
+    if (em.cc) {
+      metaHtml += `<div class="meta-row"><span class="meta-label">CC</span><span class="meta-value" contenteditable onblur="updateEmail(${i},'cc',this.textContent)">${escHtml(em.cc)}</span></div>`;
+    }
+    metaHtml += `<div class="meta-row"><span class="meta-label">DATE</span><span class="meta-value">${escHtml(em.dateFormatted)}</span></div>`;
+
+    let attHtml = '';
+    if (em.attachments.length > 0) {
+      attHtml = '<div class="attachments"><span class="att-label">ATTACHMENTS</span>';
+      em.attachments.forEach(a => {
+        attHtml += '<div class="att-item">📎 ' + escHtml(a.filename) + ' (' + escHtml(a.mimeType) + (a.size ? ', ' + Math.round(a.size/1024) + 'KB' : '') + ')</div>';
+      });
+      attHtml += '</div>';
+    }
+
+    card.innerHTML = `
+      <div class="email-counter">
+        <span>${String(i+1).padStart(2,'0')}/${String(emails.length).padStart(2,'0')}</span>
+        ${em.important ? '<span class="badge-important">IMPORTANT</span>' : ''}
+      </div>
+      <div class="email-subject" contenteditable onblur="updateEmail(${i},'subject',this.textContent)">${escHtml(em.subject || 'No Subject')}</div>
+      ${metaHtml}
+      <div class="email-body" contenteditable onblur="updateEmail(${i},'body',this.textContent)">${escHtml(em.body)}</div>
+      ${attHtml}
+    `;
+    list.appendChild(card);
+  });
+}
+
+function escHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+
+function updateEmail(i, field, value) {
+  if (emails[i]) emails[i][field] = value;
+}
+
+// ─── DOCX Generation ────────────────────────────────
+async function downloadDocx() {
+  if (!emails.length) return;
+  const btn = document.getElementById('btnDownload');
+  btn.disabled = true;
+  btn.textContent = 'Generating...';
+
+  try {
+    const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, BorderStyle, WidthType, PageBreak } = docx;
+    const todayStr = document.getElementById('todayLine').textContent;
+    const noBorder = { style: BorderStyle.NONE, size: 0 };
+    const noBorders = { top: noBorder, bottom: noBorder, left: noBorder, right: noBorder };
+    const sections = [];
+
+    emails.forEach((em, i) => {
+      if (i > 0) sections.push(new Paragraph({ spacing: { before: 240, after: 240 }, border: { bottom: { style: BorderStyle.SINGLE, size: 2, color: '3D4A2A' } }, children: [] }));
+
+      sections.push(new Paragraph({ spacing: { before: 180, after: 40 }, children: [
+        new TextRun({ text: String(i+1).padStart(2,'0') + ' / ' + String(emails.length).padStart(2,'0'), font: 'Courier New', size: 16, color: 'C8C0B4' }),
+        ...(em.important ? [new TextRun({ text: '   IMPORTANT', font: 'Arial', size: 14, bold: true, color: '3D4A2A' })] : []),
+      ] }));
+
+      sections.push(new Paragraph({ spacing: { before: 40, after: 120 }, children: [
+        new TextRun({ text: em.subject || 'No Subject', font: 'Georgia', size: 28, bold: true, color: '3D4A2A' }),
+      ] }));
+
+      const meta = [['FROM', em.from], ['TO', em.to]];
+      if (em.cc) meta.push(['CC', em.cc]);
+      meta.push(['DATE', em.dateFormatted]);
+
+      sections.push(new Table({ width: { size: 9360, type: WidthType.DXA }, columnWidths: [1200, 8160],
+        rows: meta.map(([l, v]) => new TableRow({ children: [
+          new TableCell({ borders: noBorders, width: { size: 1200, type: WidthType.DXA }, margins: { top: 20, bottom: 20, left: 0, right: 80 },
+            children: [new Paragraph({ children: [new TextRun({ text: l, font: 'Arial', size: 14, bold: true, color: '6B7A4F' })] })] }),
+          new TableCell({ borders: noBorders, width: { size: 8160, type: WidthType.DXA }, margins: { top: 20, bottom: 20, left: 0, right: 0 },
+            children: [new Paragraph({ children: [new TextRun({ text: v || '', font: 'Arial', size: 18, color: '2C2C2C' })] })] }),
+        ] })),
+      }));
+
+      sections.push(new Paragraph({ spacing: { before: 80, after: 40 }, children: [] }));
+
+      (em.body || '').split('\n').forEach(line => {
+        sections.push(new Paragraph({ spacing: { before: 0, after: 40 }, children: [
+          new TextRun({ text: line || ' ', font: 'Arial', size: 19, color: '2C2C2C' }),
+        ] }));
+      });
+
+      if (em.attachments && em.attachments.length > 0) {
+        sections.push(new Paragraph({ spacing: { before: 120, after: 40 }, children: [
+          new TextRun({ text: 'ATTACHMENTS', font: 'Arial', size: 14, bold: true, color: '6B7A4F' }),
+        ] }));
+        em.attachments.forEach(a => {
+          sections.push(new Paragraph({ spacing: { before: 0, after: 20 }, children: [
+            new TextRun({ text: '  ' + a.filename + ' (' + a.mimeType + (a.size ? ', ' + Math.round(a.size/1024) + 'KB' : '') + ')', font: 'Courier New', size: 16, color: '6B7A4F' }),
+          ] }));
+        });
+      }
+    });
+
+    const doc = new Document({
+      styles: { default: { document: { run: { font: 'Arial', size: 20 } } } },
+      sections: [{ properties: { page: { size: { width: 12240, height: 15840 }, margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } } },
+        children: [
+          new Paragraph({ spacing: { before: 0, after: 40 }, children: [new TextRun({ text: '\u25A0  Solidarity of Unbridled Labour', font: 'Arial', size: 18, bold: true, color: '1A1A1A' })] }),
+          new Paragraph({ spacing: { before: 800, after: 0 }, children: [] }),
+          new Paragraph({ spacing: { before: 0, after: 60 }, children: [new TextRun({ text: 'Topsheet', font: 'Georgia', size: 72, color: '3D4A2A' })] }),
+          new Paragraph({ spacing: { before: 0, after: 20 }, border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: '3D4A2A' } }, children: [] }),
+          new Paragraph({ spacing: { before: 80, after: 0 }, children: [new TextRun({ text: todayStr, font: 'Arial', size: 22, color: '6B7A4F' })] }),
+          new Paragraph({ spacing: { before: 40, after: 0 }, children: [new TextRun({ text: emails.length + ' emails', font: 'Arial', size: 18, color: 'C8C0B4' })] }),
+          new Paragraph({ children: [new PageBreak()] }),
+          ...sections,
+          new Paragraph({ spacing: { before: 400, after: 0 }, children: [] }),
+          new Paragraph({ border: { top: { style: BorderStyle.SINGLE, size: 3, color: '3D4A2A' } }, children: [
+            new TextRun({ text: '\u25A0  Solidarity of Unbridled Labour  \u00B7  Generated ' + todayStr, font: 'Arial', size: 14, color: 'C8C0B4' }),
+          ] }),
+        ],
+      }],
+    });
+
+    const blob = await Packer.toBlob(doc);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'Topsheet_' + new Date().toISOString().split('T')[0] + '.docx';
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    showError('Failed to generate .docx: ' + err.message);
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Download .docx';
+}
+</script>
+</body>
+</html>
