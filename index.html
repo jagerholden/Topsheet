@@ -364,13 +364,16 @@
 </div>
 
 <!-- docx library -->
-<!-- docx loaded dynamically via ESM import in downloadDocx() -->
 
 <script>
 // ─── Config ─────────────────────────────────────────
 const CLIENT_ID = '281918788023-vrovhri278b75412kpmla9h1r28dbtde.apps.googleusercontent.com';
 const SCOPES = 'https://www.googleapis.com/auth/gmail.readonly';
-const GMAIL_QUERY = 'is:unread -category:promotions -category:updates -category:forums -category:social newer_than:1d -in:sent';
+
+// Build today's date filter (YYYY/MM/DD format for Gmail)
+const _now = new Date();
+const _today = _now.getFullYear() + '/' + String(_now.getMonth()+1).padStart(2,'0') + '/' + String(_now.getDate()).padStart(2,'0');
+const GMAIL_QUERY = 'is:unread -category:promotions -category:updates -category:forums -category:social -in:sent after:' + _today;
 
 let accessToken = null;
 let emails = [];
@@ -700,88 +703,212 @@ function updateEmail(i, field, value) {
   if (emails[i]) emails[i][field] = value;
 }
 
-// ─── DOCX Generation ────────────────────────────────
+// ─── DOCX Generation (raw XML, zero dependencies) ───
+// A .docx is a ZIP of XML files. We build it manually.
+
+// Tiny ZIP builder (store-only, no compression needed for small docs)
+function createZip(files) {
+  const enc = new TextEncoder();
+  const parts = []; const centralDir = []; let offset = 0;
+
+  for (const { name, data } of files) {
+    const nameBytes = enc.encode(name);
+    const content = typeof data === 'string' ? enc.encode(data) : data;
+    // Local file header
+    const local = new Uint8Array(30 + nameBytes.length + content.length);
+    const v = new DataView(local.buffer);
+    v.setUint32(0, 0x04034b50, true); // sig
+    v.setUint16(4, 20, true); // version
+    v.setUint16(6, 0, true); // flags
+    v.setUint16(8, 0, true); // compression: store
+    v.setUint16(10, 0, true); v.setUint16(12, 0, true); // time/date
+    v.setUint32(14, 0, true); // crc (0 for store)
+    v.setUint32(18, content.length, true); // compressed
+    v.setUint32(22, content.length, true); // uncompressed
+    v.setUint16(26, nameBytes.length, true);
+    v.setUint16(28, 0, true); // extra len
+    local.set(nameBytes, 30);
+    local.set(content, 30 + nameBytes.length);
+
+    // CRC32
+    const crc = crc32(content);
+    v.setUint32(14, crc, true);
+
+    parts.push(local);
+
+    // Central directory entry
+    const central = new Uint8Array(46 + nameBytes.length);
+    const cv = new DataView(central.buffer);
+    cv.setUint32(0, 0x02014b50, true);
+    cv.setUint16(4, 20, true); cv.setUint16(6, 20, true);
+    cv.setUint16(8, 0, true); cv.setUint16(10, 0, true);
+    cv.setUint16(12, 0, true); cv.setUint16(14, 0, true);
+    cv.setUint32(16, crc, true);
+    cv.setUint32(20, content.length, true);
+    cv.setUint32(24, content.length, true);
+    cv.setUint16(28, nameBytes.length, true);
+    cv.setUint16(30, 0, true); cv.setUint16(32, 0, true);
+    cv.setUint16(34, 0, true); cv.setUint16(36, 0, true);
+    cv.setUint32(38, 0, true);
+    cv.setUint32(42, offset, true);
+    central.set(nameBytes, 46);
+    centralDir.push(central);
+
+    offset += local.length;
+  }
+
+  const cdOffset = offset;
+  let cdSize = 0;
+  centralDir.forEach(c => cdSize += c.length);
+
+  const eocd = new Uint8Array(22);
+  const ev = new DataView(eocd.buffer);
+  ev.setUint32(0, 0x06054b50, true);
+  ev.setUint16(4, 0, true); ev.setUint16(6, 0, true);
+  ev.setUint16(8, files.length, true);
+  ev.setUint16(10, files.length, true);
+  ev.setUint32(12, cdSize, true);
+  ev.setUint32(16, cdOffset, true);
+  ev.setUint16(20, 0, true);
+
+  const total = new Uint8Array(offset + cdSize + 22);
+  let pos = 0;
+  parts.forEach(p => { total.set(p, pos); pos += p.length; });
+  centralDir.forEach(c => { total.set(c, pos); pos += c.length; });
+  total.set(eocd, pos);
+  return total;
+}
+
+function crc32(data) {
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < data.length; i++) {
+    crc ^= data[i];
+    for (let j = 0; j < 8; j++) crc = (crc >>> 1) ^ (crc & 1 ? 0xEDB88320 : 0);
+  }
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+function escXml(s) {
+  return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
+
+function xmlPara(text, opts = {}) {
+  const { font = 'Arial', size = 20, color = '2C2C2C', bold = false, before = 0, after = 0 } = opts;
+  return `<w:p><w:pPr><w:spacing w:before="${before}" w:after="${after}"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="${font}" w:hAnsi="${font}"/><w:sz w:val="${size}"/><w:color w:val="${color}"/>${bold ? '<w:b/>' : ''}</w:rPr><w:t xml:space="preserve">${escXml(text)}</w:t></w:r></w:p>`;
+}
+
+function xmlPageBreak() {
+  return '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
+}
+
+function xmlDivider() {
+  return `<w:p><w:pPr><w:spacing w:before="240" w:after="240"/><w:pBdr><w:bottom w:val="single" w:sz="4" w:color="3D4A2A"/></w:pBdr></w:pPr></w:p>`;
+}
+
+function buildDocXml(emails, todayStr) {
+  let body = '';
+
+  // Cover page
+  body += xmlPara('\u25A0  Solidarity of Unbridled Labour', { font: 'Arial', size: 18, bold: true, color: '1A1A1A', after: 40 });
+  body += '<w:p><w:pPr><w:spacing w:before="800"/></w:pPr></w:p>';
+  body += xmlPara('Topsheet', { font: 'Georgia', size: 72, color: '3D4A2A', after: 60 });
+  body += `<w:p><w:pPr><w:spacing w:after="20"/><w:pBdr><w:bottom w:val="single" w:sz="8" w:color="3D4A2A"/></w:pBdr></w:pPr></w:p>`;
+  body += xmlPara(todayStr, { font: 'Arial', size: 22, color: '6B7A4F', before: 80 });
+  body += xmlPara(emails.length + ' emails', { font: 'Arial', size: 18, color: 'C8C0B4', before: 40 });
+  body += xmlPageBreak();
+
+  // Emails
+  emails.forEach((em, i) => {
+    if (i > 0) body += xmlDivider();
+
+    // Counter
+    let counterText = String(i+1).padStart(2,'0') + ' / ' + String(emails.length).padStart(2,'0');
+    if (em.important) counterText += '   IMPORTANT';
+    body += xmlPara(counterText, { font: 'Courier New', size: 16, color: 'C8C0B4', before: 180, after: 40 });
+
+    // Subject
+    body += xmlPara(em.subject || 'No Subject', { font: 'Georgia', size: 28, bold: true, color: '3D4A2A', before: 40, after: 120 });
+
+    // Metadata
+    const meta = [['FROM', em.from], ['TO', em.to]];
+    if (em.cc) meta.push(['CC', em.cc]);
+    meta.push(['DATE', em.dateFormatted]);
+    meta.forEach(([label, value]) => {
+      body += `<w:p><w:pPr><w:spacing w:before="20" w:after="20"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="14"/><w:b/><w:color w:val="6B7A4F"/></w:rPr><w:t xml:space="preserve">${escXml(label)}    </w:t></w:r><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="18"/><w:color w:val="2C2C2C"/></w:rPr><w:t xml:space="preserve">${escXml(value || '')}</w:t></w:r></w:p>`;
+    });
+
+    body += '<w:p><w:pPr><w:spacing w:before="80"/></w:pPr></w:p>';
+
+    // Body lines
+    (em.body || '').split('\n').forEach(line => {
+      body += xmlPara(line || ' ', { font: 'Arial', size: 19, color: '2C2C2C', after: 40 });
+    });
+
+    // Attachments
+    if (em.attachments && em.attachments.length > 0) {
+      body += xmlPara('ATTACHMENTS', { font: 'Arial', size: 14, bold: true, color: '6B7A4F', before: 120, after: 40 });
+      em.attachments.forEach(a => {
+        body += xmlPara('  ' + a.filename + ' (' + a.mimeType + (a.size ? ', ' + Math.round(a.size/1024) + 'KB' : '') + ')', { font: 'Courier New', size: 16, color: '6B7A4F', after: 20 });
+      });
+    }
+  });
+
+  // Footer
+  body += '<w:p><w:pPr><w:spacing w:before="400"/></w:pPr></w:p>';
+  body += `<w:p><w:pPr><w:pBdr><w:top w:val="single" w:sz="6" w:color="3D4A2A"/></w:pBdr></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="14"/><w:color w:val="C8C0B4"/></w:rPr><w:t xml:space="preserve">\u25A0  Solidarity of Unbridled Labour  \u00B7  Generated ${escXml(todayStr)}</w:t></w:r></w:p>`;
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas"
+  xmlns:mo="http://schemas.microsoft.com/office/mac/office/2008/main"
+  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+  xmlns:mv="urn:schemas-microsoft-com:mac:vml"
+  xmlns:o="urn:schemas-microsoft-com:office:office"
+  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+  xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"
+  xmlns:v="urn:schemas-microsoft-com:vml"
+  xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+  xmlns:w10="urn:schemas-microsoft-com:office:word"
+  xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+  xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml">
+<w:body>${body}
+<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>
+</w:body></w:document>`;
+}
+
 async function downloadDocx() {
   if (!emails.length) return;
   const btn = document.getElementById('btnDownload');
   btn.disabled = true;
-  btn.textContent = 'Loading library...';
+  btn.textContent = 'Generating...';
 
   try {
-    const docxLib = await import('https://cdn.jsdelivr.net/npm/docx@9.1.1/+esm');
-    const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, BorderStyle, WidthType, PageBreak } = docxLib;
-    btn.textContent = 'Generating...';
     const todayStr = document.getElementById('todayLine').textContent;
-    const noBorder = { style: BorderStyle.NONE, size: 0 };
-    const noBorders = { top: noBorder, bottom: noBorder, left: noBorder, right: noBorder };
-    const sections = [];
+    const documentXml = buildDocXml(emails, todayStr);
 
-    emails.forEach((em, i) => {
-      if (i > 0) sections.push(new Paragraph({ spacing: { before: 240, after: 240 }, border: { bottom: { style: BorderStyle.SINGLE, size: 2, color: '3D4A2A' } }, children: [] }));
+    const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>`;
 
-      sections.push(new Paragraph({ spacing: { before: 180, after: 40 }, children: [
-        new TextRun({ text: String(i+1).padStart(2,'0') + ' / ' + String(emails.length).padStart(2,'0'), font: 'Courier New', size: 16, color: 'C8C0B4' }),
-        ...(em.important ? [new TextRun({ text: '   IMPORTANT', font: 'Arial', size: 14, bold: true, color: '3D4A2A' })] : []),
-      ] }));
+    const rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`;
 
-      sections.push(new Paragraph({ spacing: { before: 40, after: 120 }, children: [
-        new TextRun({ text: em.subject || 'No Subject', font: 'Georgia', size: 28, bold: true, color: '3D4A2A' }),
-      ] }));
+    const wordRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+</Relationships>`;
 
-      const meta = [['FROM', em.from], ['TO', em.to]];
-      if (em.cc) meta.push(['CC', em.cc]);
-      meta.push(['DATE', em.dateFormatted]);
+    const zip = createZip([
+      { name: '[Content_Types].xml', data: contentTypes },
+      { name: '_rels/.rels', data: rels },
+      { name: 'word/_rels/document.xml.rels', data: wordRels },
+      { name: 'word/document.xml', data: documentXml },
+    ]);
 
-      sections.push(new Table({ width: { size: 9360, type: WidthType.DXA }, columnWidths: [1200, 8160],
-        rows: meta.map(([l, v]) => new TableRow({ children: [
-          new TableCell({ borders: noBorders, width: { size: 1200, type: WidthType.DXA }, margins: { top: 20, bottom: 20, left: 0, right: 80 },
-            children: [new Paragraph({ children: [new TextRun({ text: l, font: 'Arial', size: 14, bold: true, color: '6B7A4F' })] })] }),
-          new TableCell({ borders: noBorders, width: { size: 8160, type: WidthType.DXA }, margins: { top: 20, bottom: 20, left: 0, right: 0 },
-            children: [new Paragraph({ children: [new TextRun({ text: v || '', font: 'Arial', size: 18, color: '2C2C2C' })] })] }),
-        ] })),
-      }));
-
-      sections.push(new Paragraph({ spacing: { before: 80, after: 40 }, children: [] }));
-
-      (em.body || '').split('\n').forEach(line => {
-        sections.push(new Paragraph({ spacing: { before: 0, after: 40 }, children: [
-          new TextRun({ text: line || ' ', font: 'Arial', size: 19, color: '2C2C2C' }),
-        ] }));
-      });
-
-      if (em.attachments && em.attachments.length > 0) {
-        sections.push(new Paragraph({ spacing: { before: 120, after: 40 }, children: [
-          new TextRun({ text: 'ATTACHMENTS', font: 'Arial', size: 14, bold: true, color: '6B7A4F' }),
-        ] }));
-        em.attachments.forEach(a => {
-          sections.push(new Paragraph({ spacing: { before: 0, after: 20 }, children: [
-            new TextRun({ text: '  ' + a.filename + ' (' + a.mimeType + (a.size ? ', ' + Math.round(a.size/1024) + 'KB' : '') + ')', font: 'Courier New', size: 16, color: '6B7A4F' }),
-          ] }));
-        });
-      }
-    });
-
-    const doc = new Document({
-      styles: { default: { document: { run: { font: 'Arial', size: 20 } } } },
-      sections: [{ properties: { page: { size: { width: 12240, height: 15840 }, margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } } },
-        children: [
-          new Paragraph({ spacing: { before: 0, after: 40 }, children: [new TextRun({ text: '\u25A0  Solidarity of Unbridled Labour', font: 'Arial', size: 18, bold: true, color: '1A1A1A' })] }),
-          new Paragraph({ spacing: { before: 800, after: 0 }, children: [] }),
-          new Paragraph({ spacing: { before: 0, after: 60 }, children: [new TextRun({ text: 'Topsheet', font: 'Georgia', size: 72, color: '3D4A2A' })] }),
-          new Paragraph({ spacing: { before: 0, after: 20 }, border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: '3D4A2A' } }, children: [] }),
-          new Paragraph({ spacing: { before: 80, after: 0 }, children: [new TextRun({ text: todayStr, font: 'Arial', size: 22, color: '6B7A4F' })] }),
-          new Paragraph({ spacing: { before: 40, after: 0 }, children: [new TextRun({ text: emails.length + ' emails', font: 'Arial', size: 18, color: 'C8C0B4' })] }),
-          new Paragraph({ children: [new PageBreak()] }),
-          ...sections,
-          new Paragraph({ spacing: { before: 400, after: 0 }, children: [] }),
-          new Paragraph({ border: { top: { style: BorderStyle.SINGLE, size: 3, color: '3D4A2A' } }, children: [
-            new TextRun({ text: '\u25A0  Solidarity of Unbridled Labour  \u00B7  Generated ' + todayStr, font: 'Arial', size: 14, color: 'C8C0B4' }),
-          ] }),
-        ],
-      }],
-    });
-
-    const blob = await Packer.toBlob(doc);
+    const blob = new Blob([zip], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
