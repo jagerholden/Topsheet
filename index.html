@@ -654,7 +654,7 @@ function crc32(data) {
 function escXml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;'); }
 
 function xmlP(text, opts = {}) {
-  const { font='Arial', size=20, color='2C2C2C', bold=false, before=0, after=0, border='' } = opts;
+  const { font='Arial', size=22, color='2C2C2C', bold=false, before=0, after=0, border='' } = opts;
   return `<w:p><w:pPr><w:spacing w:before="${before}" w:after="${after}"/>${border}</w:pPr><w:r><w:rPr><w:rFonts w:ascii="${font}" w:hAnsi="${font}"/><w:sz w:val="${size}"/><w:color w:val="${color}"/>${bold?'<w:b/>':''}</w:rPr><w:t xml:space="preserve">${escXml(text)}</w:t></w:r></w:p>`;
 }
 
@@ -695,42 +695,41 @@ async function downloadDocx() {
 
     // Build document XML
     let body = '';
-    body += xmlP('\u25A0  Solidarity of Unbridled Labour', { font:'Arial', size:18, bold:true, color:'1A1A1A', after:40 });
-    body += '<w:p><w:pPr><w:spacing w:before="800"/></w:pPr></w:p>';
+    body += xmlP('\u25A0  Solidarity of Unbridled Labour', { font:'Arial', size:20, bold:true, color:'1A1A1A', after:40 });
+    body += '<w:p><w:pPr><w:spacing w:before="400"/></w:pPr></w:p>';
     body += xmlP('Topsheet', { font:'Georgia', size:72, color:'3D4A2A', after:60 });
     body += `<w:p><w:pPr><w:spacing w:after="20"/><w:pBdr><w:bottom w:val="single" w:sz="8" w:color="3D4A2A"/></w:pBdr></w:pPr></w:p>`;
-    body += xmlP(todayStr, { font:'Arial', size:22, color:'6B7A4F', before:80 });
-    body += xmlP(emails.length + ' emails in ' + threads.length + ' threads', { font:'Arial', size:18, color:'C8C0B4', before:40 });
+    body += xmlP(todayStr, { font:'Arial', size:24, color:'6B7A4F', before:80 });
+    body += xmlP(emails.length + ' emails in ' + threads.length + ' threads', { font:'Arial', size:20, color:'C8C0B4', before:40 });
 
     // Daily quote on cover
     const dq = getDailyQuote();
-    body += '<w:p><w:pPr><w:spacing w:before="400"/></w:pPr></w:p>';
-    body += `<w:p><w:pPr><w:spacing w:before="80" w:after="40"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Georgia" w:hAnsi="Georgia"/><w:sz w:val="22"/><w:i/><w:color w:val="6B7A4F"/></w:rPr><w:t xml:space="preserve">\u201C${escXml(dq.text)}\u201D</w:t></w:r></w:p>`;
-    body += xmlP('\u2014 ' + dq.author, { font:'Arial', size:16, color:'3D4A2A', before:40, bold:true });
+    body += '<w:p><w:pPr><w:spacing w:before="300"/></w:pPr></w:p>';
+    body += `<w:p><w:pPr><w:spacing w:before="80" w:after="40"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Georgia" w:hAnsi="Georgia"/><w:sz w:val="24"/><w:i/><w:color w:val="6B7A4F"/></w:rPr><w:t xml:space="preserve">\u201C${escXml(dq.text)}\u201D</w:t></w:r></w:p>`;
+    body += xmlP('\u2014 ' + dq.author, { font:'Arial', size:18, color:'3D4A2A', before:40, bold:true });
 
-    body += '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
-
-    // Notes in docx
+    // Notes on cover page
     const notesText = (document.getElementById('notesArea').value || '').trim();
     if (notesText) {
+      body += '<w:p><w:pPr><w:spacing w:before="300"/></w:pPr></w:p>';
       body += `<w:p><w:pPr><w:spacing w:before="0" w:after="80"/><w:pBdr><w:bottom w:val="single" w:sz="8" w:color="D4E157"/></w:pBdr></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Georgia" w:hAnsi="Georgia"/><w:sz w:val="28"/><w:b/><w:color w:val="3D4A2A"/></w:rPr><w:t xml:space="preserve">Notes</w:t></w:r></w:p>`;
       notesText.split('\n').forEach(line => {
-        body += xmlP(line || ' ', { font:'Arial', size:20, color:'2C2C2C', after:60 });
+        body += xmlP(line || ' ', { font:'Arial', size:22, color:'2C2C2C', after:60 });
       });
-      body += '<w:p><w:pPr><w:spacing w:before="200"/></w:pPr></w:p>';
     }
 
-    // Calendar in docx
+    // Calendar on cover page
     if (calEvents.length > 0) {
       const isFriday = new Date().getDay() === 5;
       const calTitle = isFriday ? 'Weekend + Monday Schedule' : 'Upcoming Schedule';
 
+      body += '<w:p><w:pPr><w:spacing w:before="300"/></w:pPr></w:p>';
       body += `<w:p><w:pPr><w:spacing w:before="0" w:after="80"/><w:pBdr><w:bottom w:val="single" w:sz="8" w:color="D4E157"/></w:pBdr></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Georgia" w:hAnsi="Georgia"/><w:sz w:val="28"/><w:b/><w:color w:val="3D4A2A"/></w:rPr><w:t xml:space="preserve">${escXml(calTitle)}</w:t></w:r></w:p>`;
 
       const dayGroups = groupCalByDay(calEvents);
       dayGroups.forEach(group => {
         const dayLabel = group.date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-        body += xmlP(dayLabel, { font:'Arial', size:18, bold:true, color:'6B7A4F', before:160, after:60 });
+        body += xmlP(dayLabel, { font:'Arial', size:20, bold:true, color:'6B7A4F', before:160, after:60 });
 
         group.events.forEach(ev => {
           let timeStr = '';
@@ -742,17 +741,16 @@ async function downloadDocx() {
             timeStr = s.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit', hour12:true }) + ' \u2013 ' + e.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit', hour12:true });
           }
 
-          body += `<w:p><w:pPr><w:spacing w:before="100" w:after="20"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Courier New" w:hAnsi="Courier New"/><w:sz w:val="16"/><w:color w:val="6B7A4F"/></w:rPr><w:t xml:space="preserve">${escXml(timeStr)}    </w:t></w:r><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="20"/><w:b/><w:color w:val="3D4A2A"/></w:rPr><w:t xml:space="preserve">${escXml(ev.summary)}</w:t></w:r></w:p>`;
+          body += `<w:p><w:pPr><w:spacing w:before="100" w:after="20"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Courier New" w:hAnsi="Courier New"/><w:sz w:val="18"/><w:color w:val="6B7A4F"/></w:rPr><w:t xml:space="preserve">${escXml(timeStr)}    </w:t></w:r><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="22"/><w:b/><w:color w:val="3D4A2A"/></w:rPr><w:t xml:space="preserve">${escXml(ev.summary)}</w:t></w:r></w:p>`;
 
-          if (ev.location) body += xmlP('    ' + ev.location, { font:'Arial', size:16, color:'6B7A4F', after:20 });
-          if (ev.attendees.length > 0) body += xmlP('    ' + ev.attendees.slice(0, 8).join(', ') + (ev.attendees.length > 8 ? ' +' + (ev.attendees.length - 8) + ' more' : ''), { font:'Arial', size:16, color:'C8C0B4', after:20 });
+          if (ev.location) body += xmlP('    ' + ev.location, { font:'Arial', size:18, color:'6B7A4F', after:20 });
+          if (ev.attendees.length > 0) body += xmlP('    ' + ev.attendees.slice(0, 8).join(', ') + (ev.attendees.length > 8 ? ' +' + (ev.attendees.length - 8) + ' more' : ''), { font:'Arial', size:18, color:'C8C0B4', after:20 });
         });
       });
-
-      // Divider before emails
-      body += `<w:p><w:pPr><w:spacing w:before="240" w:after="240"/><w:pBdr><w:bottom w:val="single" w:sz="6" w:color="3D4A2A"/></w:pBdr></w:pPr></w:p>`;
-      body += xmlP('EMAILS', { font:'Arial', size:14, bold:true, color:'C8C0B4', before:0, after:120 });
     }
+
+    // Page break before emails
+    body += '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
 
     let emailNum = 0;
     threads.forEach((thread, ti) => {
@@ -771,20 +769,20 @@ async function downloadDocx() {
 
         let counter = String(emailNum).padStart(2,'0') + ' / ' + String(emails.length).padStart(2,'0');
         if (em.important) counter += '   IMPORTANT';
-        body += xmlP(counter, { font:'Courier New', size:16, color:'C8C0B4', before:isChild?120:180, after:40, border:bdr });
+        body += xmlP(counter, { font:'Courier New', size:18, color:'C8C0B4', before:isChild?120:180, after:40, border:bdr });
         body += xmlP(em.subject || 'No Subject', { font:'Georgia', size:28, bold:true, color:'3D4A2A', before:40, after:120, border:bdr });
 
         const meta = [['FROM', em.from], ['TO', em.to]];
         if (em.cc) meta.push(['CC', em.cc]);
         meta.push(['DATE', em.dateFormatted]);
         meta.forEach(([label, value]) => {
-          body += `<w:p><w:pPr><w:spacing w:before="20" w:after="20"/>${bdr}</w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="14"/><w:b/><w:color w:val="6B7A4F"/></w:rPr><w:t xml:space="preserve">${escXml(label)}    </w:t></w:r><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="18"/><w:color w:val="2C2C2C"/></w:rPr><w:t xml:space="preserve">${escXml(value || '')}</w:t></w:r></w:p>`;
+          body += `<w:p><w:pPr><w:spacing w:before="20" w:after="20"/>${bdr}</w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="16"/><w:b/><w:color w:val="6B7A4F"/></w:rPr><w:t xml:space="preserve">${escXml(label)}    </w:t></w:r><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="22"/><w:color w:val="2C2C2C"/></w:rPr><w:t xml:space="preserve">${escXml(value || '')}</w:t></w:r></w:p>`;
         });
 
         body += `<w:p><w:pPr><w:spacing w:before="80"/>${bdr}</w:pPr></w:p>`;
 
         (em.body || '').split('\n').forEach(line => {
-          body += `<w:p><w:pPr><w:spacing w:after="40"/>${bdr}</w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="19"/><w:color w:val="2C2C2C"/></w:rPr><w:t xml:space="preserve">${escXml(line || ' ')}</w:t></w:r></w:p>`;
+          body += `<w:p><w:pPr><w:spacing w:after="40"/>${bdr}</w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="22"/><w:color w:val="2C2C2C"/></w:rPr><w:t xml:space="preserve">${escXml(line || ' ')}</w:t></w:r></w:p>`;
         });
 
         // Inline images
@@ -795,8 +793,8 @@ async function downloadDocx() {
         // Non-image attachments
         const nonImg = em.attachments.filter(a => !a.isImage);
         if (nonImg.length > 0) {
-          body += xmlP('ATTACHMENTS', { font:'Arial', size:14, bold:true, color:'6B7A4F', before:120, after:40 });
-          nonImg.forEach(a => { body += xmlP('  ' + a.filename + ' (' + a.mimeType + (a.size ? ', ' + Math.round(a.size/1024) + 'KB' : '') + ')', { font:'Courier New', size:16, color:'6B7A4F', after:20 }); });
+          body += xmlP('ATTACHMENTS', { font:'Arial', size:16, bold:true, color:'6B7A4F', before:120, after:40 });
+          nonImg.forEach(a => { body += xmlP('  ' + a.filename + ' (' + a.mimeType + (a.size ? ', ' + Math.round(a.size/1024) + 'KB' : '') + ')', { font:'Courier New', size:18, color:'6B7A4F', after:20 }); });
         }
       });
     });
