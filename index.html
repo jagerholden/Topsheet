@@ -364,7 +364,7 @@
 </div>
 
 <!-- docx library -->
-<script src="https://cdn.jsdelivr.net/npm/docx@9.1.1/build/index.umd.min.js"></script>
+<script src="https://unpkg.com/docx@9.1.1/build/index.umd.js"></script>
 
 <script>
 // ─── Config ─────────────────────────────────────────
@@ -703,6 +703,10 @@ function updateEmail(i, field, value) {
 // ─── DOCX Generation ────────────────────────────────
 async function downloadDocx() {
   if (!emails.length) return;
+  if (!window.docx) {
+    showError('The docx library failed to load. Try refreshing the page.');
+    return;
+  }
   const btn = document.getElementById('btnDownload');
   btn.disabled = true;
   btn.textContent = 'Generating...';
