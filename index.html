@@ -364,7 +364,7 @@
 </div>
 
 <!-- docx library -->
-<script src="https://unpkg.com/docx@9.1.1/build/index.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx@9.1.1/build/index.umd.min.js"></script>
 
 <script>
 // ─── Config ─────────────────────────────────────────
@@ -712,7 +712,12 @@ async function downloadDocx() {
   btn.textContent = 'Generating...';
 
   try {
-    const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, BorderStyle, WidthType, PageBreak } = window.docx;
+    let docxLib = window.docx;
+    if (!docxLib) {
+      // Fallback: dynamic ESM import
+      docxLib = await import('https://cdn.jsdelivr.net/npm/docx@9.1.1/+esm');
+    }
+    const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, BorderStyle, WidthType, PageBreak } = docxLib;
     const todayStr = document.getElementById('todayLine').textContent;
     const noBorder = { style: BorderStyle.NONE, size: 0 };
     const noBorders = { top: noBorder, bottom: noBorder, left: noBorder, right: noBorder };
