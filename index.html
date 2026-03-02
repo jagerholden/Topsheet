@@ -81,6 +81,9 @@
   .att-label { font-size: 9px; font-weight: 700; color: var(--olive); letter-spacing: 0.05em; }
   .att-item { font-family: var(--mono); font-size: 10px; color: var(--olive); margin-top: 3px; }
 
+  .btn-remove { float: right; font-family: var(--sans); font-size: 10px; font-weight: 600; padding: 4px 10px; background: transparent; color: var(--div); border: 1px solid var(--div); border-radius: 2px; cursor: pointer; transition: all 0.15s; letter-spacing: 0.03em; }
+  .btn-remove:hover { background: #FEE2E2; color: #991B1B; border-color: #FECACA; }
+
   .hidden { display: none; }
 </style>
 </head>
@@ -355,7 +358,7 @@ function renderEmails() {
       }
 
       card.innerHTML = `
-        <div class="email-counter"><span>${String(gi+1).padStart(2,'0')}/${String(emails.length).padStart(2,'0')}</span>${em.important ? '<span class="badge-important">IMPORTANT</span>' : ''}</div>
+        <div class="email-counter"><span>${String(gi+1).padStart(2,'0')}/${String(emails.length).padStart(2,'0')}</span>${em.important ? '<span class="badge-important">IMPORTANT</span>' : ''}<button class="btn-remove" onclick="removeEmail('${em.id}')">REMOVE</button></div>
         <div class="email-subject" contenteditable onblur="updateEmail(${gi},'subject',this.textContent)">${escHtml(em.subject || 'No Subject')}</div>
         ${metaHtml}
         <div class="email-body" contenteditable onblur="updateEmail(${gi},'body',this.textContent)">${escHtml(em.body)}</div>
@@ -368,6 +371,27 @@ function renderEmails() {
 
 function escHtml(str) { const d = document.createElement('div'); d.textContent = str || ''; return d.innerHTML; }
 function updateEmail(i, field, value) { if (emails[i]) emails[i][field] = value; }
+
+function removeEmail(emailId) {
+  emails = emails.filter(e => e.id !== emailId);
+  // Rebuild threads from remaining emails
+  threads = [];
+  const threadMap = new Map();
+  emails.forEach(em => {
+    if (!threadMap.has(em.threadId)) threadMap.set(em.threadId, []);
+    threadMap.get(em.threadId).push(em);
+  });
+  const seen = new Set();
+  emails.forEach(em => {
+    if (!seen.has(em.threadId)) {
+      seen.add(em.threadId);
+      const msgs = threadMap.get(em.threadId);
+      msgs.sort((a, b) => parseInt(a.date) - parseInt(b.date));
+      threads.push({ threadId: em.threadId, subject: msgs[0].subject || 'No Subject', messages: msgs, important: msgs.some(m => m.important) });
+    }
+  });
+  renderEmails();
+}
 
 // ─── DOCX Generation (raw XML + ZIP, zero deps) ────
 
