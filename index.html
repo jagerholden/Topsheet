@@ -84,6 +84,16 @@
   .btn-remove { float: right; font-family: var(--sans); font-size: 10px; font-weight: 600; padding: 4px 10px; background: transparent; color: var(--div); border: 1px solid var(--div); border-radius: 2px; cursor: pointer; transition: all 0.15s; letter-spacing: 0.03em; }
   .btn-remove:hover { background: #FEE2E2; color: #991B1B; border-color: #FECACA; }
 
+  /* Calendar */
+  .cal-header { font-family: var(--serif); font-size: 22px; font-weight: 600; color: var(--dark-olive); margin: 0 0 16px; padding-bottom: 8px; border-bottom: 2px solid var(--lime); }
+  .cal-event { display: flex; gap: 14px; padding: 10px 14px; margin-bottom: 8px; background: var(--white); border: 1px solid var(--div); border-radius: 4px; align-items: flex-start; }
+  .cal-time { font-family: var(--mono); font-size: 11px; color: var(--olive); min-width: 90px; padding-top: 2px; }
+  .cal-details { flex: 1; }
+  .cal-title { font-size: 14px; font-weight: 600; color: var(--dark-olive); }
+  .cal-loc { font-size: 11px; color: var(--olive); margin-top: 2px; }
+  .cal-allday { font-family: var(--mono); font-size: 11px; color: var(--lime); background: var(--dark-olive); padding: 1px 6px; border-radius: 2px; }
+  .cal-section-gap { margin-bottom: 32px; }
+
   .hidden { display: none; }
 </style>
 </head>
@@ -111,6 +121,10 @@
       <button class="btn btn-lime hidden" id="btnDownload" onclick="downloadDocx()">Download .docx</button>
     </div>
     <div class="hidden" id="summaryBar"></div>
+    <div class="hidden" id="calSection">
+      <div class="cal-header" id="calHeader"></div>
+      <div id="calList"></div>
+    </div>
     <div id="emailList"></div>
   </div>
 </div>
@@ -118,7 +132,7 @@
 <script>
 // ─── Config ─────────────────────────────────────────
 const CLIENT_ID = '281918788023-vrovhri278b75412kpmla9h1r28dbtde.apps.googleusercontent.com';
-const SCOPES = 'https://www.googleapis.com/auth/gmail.readonly';
+const SCOPES = 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.readonly';
 const _now = new Date();
 const _today = _now.getFullYear() + '/' + String(_now.getMonth()+1).padStart(2,'0') + '/' + String(_now.getDate()).padStart(2,'0');
 const GMAIL_QUERY = 'is:unread -category:promotions -category:updates -category:forums -category:social -in:sent after:' + _today;
@@ -126,6 +140,7 @@ const GMAIL_QUERY = 'is:unread -category:promotions -category:updates -category:
 let accessToken = null;
 let emails = [];
 let threads = [];
+let calEvents = [];
 let tokenClient = null;
 
 document.getElementById('todayLine').textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
@@ -147,7 +162,7 @@ function handleAuthResponse(response) {
 function signIn() { tokenClient.requestAccessToken(); }
 function signOut() {
   if (accessToken) fetch('https://oauth2.googleapis.com/revoke?token=' + accessToken, { method: 'POST' }).catch(() => {});
-  accessToken = null; emails = []; threads = [];
+  accessToken = null; emails = []; threads = []; calEvents = [];
   document.getElementById('authGate').classList.remove('hidden');
   document.getElementById('appContent').classList.add('hidden');
   document.getElementById('btnSignOut').classList.add('hidden');
@@ -305,14 +320,112 @@ async function pullEmails() {
       }
     });
 
+    // Fetch upcoming calendar (Friday=Sat+Sun+Mon, otherwise just tomorrow)
+    showProgress('Fetching upcoming calendar...', 0, 0);
+    calEvents = [];
+    try {
+      const today = new Date();
+      const dayOfWeek = today.getDay(); // 0=Sun, 5=Fri, 6=Sat
+      const startDay = new Date(today);
+      startDay.setDate(startDay.getDate() + 1);
+      const endDay = new Date(startDay);
+      if (dayOfWeek === 5) { // Friday: fetch Sat, Sun, Mon
+        endDay.setDate(endDay.getDate() + 3);
+      } else if (dayOfWeek === 6) { // Saturday: fetch Sun, Mon
+        endDay.setDate(endDay.getDate() + 2);
+      } else {
+        endDay.setDate(endDay.getDate() + 1); // just tomorrow
+      }
+      const timeMin = startDay.toISOString().split('T')[0] + 'T00:00:00Z';
+      const timeMax = endDay.toISOString().split('T')[0] + 'T00:00:00Z';
+
+      const calRes = await fetch(
+        'https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=' + encodeURIComponent(timeMin) +
+        '&timeMax=' + encodeURIComponent(timeMax) +
+        '&singleEvents=true&orderBy=startTime&maxResults=50',
+        { headers: { Authorization: 'Bearer ' + accessToken } }
+      );
+      const calData = await calRes.json();
+      if (calData.items) {
+        calEvents = calData.items.map(ev => ({
+          summary: ev.summary || 'No Title',
+          start: ev.start.dateTime || ev.start.date,
+          end: ev.end.dateTime || ev.end.date,
+          allDay: !ev.start.dateTime,
+          location: ev.location || '',
+          attendees: (ev.attendees || []).map(a => a.displayName || a.email).filter(Boolean),
+          status: ev.status,
+          hangoutLink: ev.hangoutLink || '',
+        }));
+      }
+    } catch { /* calendar optional — don't fail the whole pull */ }
+
     hideProgress();
+    renderCalendar();
     renderEmails();
   } catch (err) { hideProgress(); showError(err.message || 'Failed to fetch emails'); }
   document.getElementById('btnPull').disabled = false;
   document.getElementById('btnPull').textContent = "Pull Today's Emails";
 }
 
-// ─── Render ─────────────────────────────────────────
+// ─── Render Calendar ────────────────────────────────
+function groupCalByDay(events) {
+  const groups = {};
+  events.forEach(ev => {
+    const d = new Date(ev.start);
+    const key = d.toISOString().split('T')[0];
+    if (!groups[key]) groups[key] = { date: d, events: [] };
+    groups[key].events.push(ev);
+  });
+  return Object.keys(groups).sort().map(k => groups[k]);
+}
+
+function renderCalendar() {
+  const section = document.getElementById('calSection');
+  const header = document.getElementById('calHeader');
+  const list = document.getElementById('calList');
+
+  if (calEvents.length === 0) {
+    section.classList.add('hidden');
+    return;
+  }
+
+  section.classList.remove('hidden');
+  section.className = 'cal-section-gap';
+
+  const dayGroups = groupCalByDay(calEvents);
+  const isFriday = new Date().getDay() === 5;
+  header.className = 'cal-header';
+  header.textContent = isFriday ? 'Weekend + Monday Schedule' : dayGroups.length > 1 ? 'Upcoming Schedule' : 'Tomorrow\u2019s Schedule';
+
+  list.innerHTML = '';
+  dayGroups.forEach(group => {
+    const dayLabel = document.createElement('div');
+    dayLabel.style.cssText = 'font-family:var(--sans);font-size:13px;font-weight:700;color:var(--olive);margin:14px 0 6px;letter-spacing:0.03em;';
+    dayLabel.textContent = group.date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    list.appendChild(dayLabel);
+
+    group.events.forEach(ev => {
+      let timeStr = '';
+      if (ev.allDay) {
+        timeStr = '<span class="cal-allday">ALL DAY</span>';
+      } else {
+        const s = new Date(ev.start);
+        const e = new Date(ev.end);
+        timeStr = s.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit', hour12:true }) + ' \u2013 ' + e.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit', hour12:true });
+      }
+      const loc = ev.location ? '<div class="cal-loc">' + escHtml(ev.location) + '</div>' : '';
+      const att = ev.attendees.length > 0 ? '<div class="cal-loc">' + escHtml(ev.attendees.slice(0, 5).join(', ')) + (ev.attendees.length > 5 ? ' +' + (ev.attendees.length - 5) + ' more' : '') + '</div>' : '';
+      const card = document.createElement('div');
+      card.className = 'cal-event';
+      card.innerHTML = `<div class="cal-time">${timeStr}</div><div class="cal-details"><div class="cal-title">${escHtml(ev.summary)}</div>${loc}${att}</div>`;
+      list.appendChild(card);
+    });
+  });
+}
+}
+
+// ─── Render Emails ──────────────────────────────────
 function renderEmails() {
   if (emails.length === 0) return;
   const impCount = emails.filter(e => e.important).length;
@@ -489,6 +602,40 @@ async function downloadDocx() {
     body += xmlP(todayStr, { font:'Arial', size:22, color:'6B7A4F', before:80 });
     body += xmlP(emails.length + ' emails in ' + threads.length + ' threads', { font:'Arial', size:18, color:'C8C0B4', before:40 });
     body += '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
+
+    // Calendar in docx
+    if (calEvents.length > 0) {
+      const isFriday = new Date().getDay() === 5;
+      const calTitle = isFriday ? 'Weekend + Monday Schedule' : 'Upcoming Schedule';
+
+      body += `<w:p><w:pPr><w:spacing w:before="0" w:after="80"/><w:pBdr><w:bottom w:val="single" w:sz="8" w:color="D4E157"/></w:pBdr></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Georgia" w:hAnsi="Georgia"/><w:sz w:val="28"/><w:b/><w:color w:val="3D4A2A"/></w:rPr><w:t xml:space="preserve">${escXml(calTitle)}</w:t></w:r></w:p>`;
+
+      const dayGroups = groupCalByDay(calEvents);
+      dayGroups.forEach(group => {
+        const dayLabel = group.date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+        body += xmlP(dayLabel, { font:'Arial', size:18, bold:true, color:'6B7A4F', before:160, after:60 });
+
+        group.events.forEach(ev => {
+          let timeStr = '';
+          if (ev.allDay) {
+            timeStr = 'ALL DAY';
+          } else {
+            const s = new Date(ev.start);
+            const e = new Date(ev.end);
+            timeStr = s.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit', hour12:true }) + ' \u2013 ' + e.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit', hour12:true });
+          }
+
+          body += `<w:p><w:pPr><w:spacing w:before="100" w:after="20"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Courier New" w:hAnsi="Courier New"/><w:sz w:val="16"/><w:color w:val="6B7A4F"/></w:rPr><w:t xml:space="preserve">${escXml(timeStr)}    </w:t></w:r><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="20"/><w:b/><w:color w:val="3D4A2A"/></w:rPr><w:t xml:space="preserve">${escXml(ev.summary)}</w:t></w:r></w:p>`;
+
+          if (ev.location) body += xmlP('    ' + ev.location, { font:'Arial', size:16, color:'6B7A4F', after:20 });
+          if (ev.attendees.length > 0) body += xmlP('    ' + ev.attendees.slice(0, 8).join(', ') + (ev.attendees.length > 8 ? ' +' + (ev.attendees.length - 8) + ' more' : ''), { font:'Arial', size:16, color:'C8C0B4', after:20 });
+        });
+      });
+
+      // Divider before emails
+      body += `<w:p><w:pPr><w:spacing w:before="240" w:after="240"/><w:pBdr><w:bottom w:val="single" w:sz="6" w:color="3D4A2A"/></w:pBdr></w:pPr></w:p>`;
+      body += xmlP('EMAILS', { font:'Arial', size:14, bold:true, color:'C8C0B4', before:0, after:120 });
+    }
 
     let emailNum = 0;
     threads.forEach((thread, ti) => {
