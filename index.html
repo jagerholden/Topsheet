@@ -29,7 +29,9 @@
 
   .main { max-width: 780px; margin: 0 auto; padding: 48px 32px; }
   h1 { font-family: var(--serif); font-size: 52px; font-weight: 400; color: var(--dark-olive); margin: 0 0 6px; line-height: 1.05; }
-  .date-line { font-size: 14px; color: var(--olive); margin: 0 0 40px; }
+  .date-line { font-size: 14px; color: var(--olive); margin: 0 0 12px; }
+  .daily-quote { font-family: var(--serif); font-size: 16px; font-style: italic; color: var(--olive); line-height: 1.5; margin: 0 0 36px; padding: 14px 0; border-top: 1px solid var(--div); }
+  .daily-quote .quote-author { font-family: var(--sans); font-size: 11px; font-style: normal; font-weight: 600; color: var(--dark-olive); margin-top: 6px; letter-spacing: 0.03em; }
 
   .auth-gate { background: var(--white); border: 1px solid var(--div); border-radius: 4px; padding: 40px 32px; text-align: center; }
   .auth-gate p { margin: 0 0 8px; font-size: 15px; }
@@ -85,6 +87,10 @@
   .btn-remove:hover { background: #FEE2E2; color: #991B1B; border-color: #FECACA; }
 
   /* Calendar */
+  .notes-header { font-family: var(--serif); font-size: 22px; font-weight: 600; color: var(--dark-olive); margin: 0 0 10px; padding-bottom: 8px; border-bottom: 2px solid var(--lime); }
+  .notes-area { width: 100%; min-height: 120px; padding: 14px 16px; font-family: var(--sans); font-size: 13px; line-height: 1.7; color: var(--char); background: var(--white); border: 1px solid var(--div); border-radius: 4px; resize: vertical; outline: none; margin-bottom: 28px; }
+  .notes-area:focus { border-color: var(--olive); }
+  .notes-area::placeholder { color: var(--div); }
   .cal-header { font-family: var(--serif); font-size: 22px; font-weight: 600; color: var(--dark-olive); margin: 0 0 16px; padding-bottom: 8px; border-bottom: 2px solid var(--lime); }
   .cal-event { display: flex; gap: 14px; padding: 10px 14px; margin-bottom: 8px; background: var(--white); border: 1px solid var(--div); border-radius: 4px; align-items: flex-start; }
   .cal-time { font-family: var(--mono); font-size: 11px; color: var(--olive); min-width: 90px; padding-top: 2px; }
@@ -108,6 +114,7 @@
 <div class="main">
   <h1>Topsheet</h1>
   <p class="date-line" id="todayLine"></p>
+  <div class="daily-quote" id="dailyQuote"></div>
   <div class="auth-gate" id="authGate">
     <p>Sign in with your Solidarity Google account to pull today's emails.</p>
     <p class="subtitle">Read-only access. Nothing is sent, modified, or deleted.</p>
@@ -121,6 +128,10 @@
       <button class="btn btn-lime hidden" id="btnDownload" onclick="downloadDocx()">Download .docx</button>
     </div>
     <div class="hidden" id="summaryBar"></div>
+    <div class="hidden" id="notesSection">
+      <div class="notes-header">Notes</div>
+      <textarea class="notes-area" id="notesArea" placeholder="Write your notes here. They'll appear at the top of the .docx."></textarea>
+    </div>
     <div class="hidden" id="calSection">
       <div class="cal-header" id="calHeader"></div>
       <div id="calList"></div>
@@ -137,6 +148,92 @@ const _now = new Date();
 const _today = _now.getFullYear() + '/' + String(_now.getMonth()+1).padStart(2,'0') + '/' + String(_now.getDate()).padStart(2,'0');
 const GMAIL_QUERY = 'is:unread -category:promotions -category:updates -category:forums -category:social -in:sent after:' + _today;
 
+// ─── Daily Quote ────────────────────────────────────
+const QUOTES = [
+  { text: "The future is unwritten", author: "Joe Strummer" },
+  { text: "If you're after getting the honey \u2014 hey then don't go killin' all the bees", author: "Joe Strummer" },
+  { text: "I'll let you be in my dreams if I can be in yours", author: "Bob Dylan" },
+  { text: "Make it new", author: "Ezra Pound" },
+  { text: "In art and dream may you proceed with abandon. In life may you proceed with balance and stealth.", author: "Patti Smith" },
+  { text: "Revolution is just a tee shirt away", author: "Billy Bragg" },
+  { text: "One's mind, once stretched by a new idea, never regains its original dimensions.", author: "Oliver Wendell Holmes" },
+  { text: "Birds born in a cage think flying is an illness.", author: "Alejandro Jodorowsky" },
+  { text: "Small hinges swing big doors.", author: "W. Clements Stone" },
+  { text: "There is nothing in a caterpillar that tells you it's going to be a butterfly.", author: "R. Buckminster Fuller" },
+  { text: "Love is metaphysical gravity.", author: "R. Buckminster Fuller" },
+  { text: "We are not going to be able to operate our Spaceship Earth successfully nor for much longer unless we see it as a whole spaceship and our fate as common. It has to be everybody or nobody.", author: "R. Buckminster Fuller" },
+  { text: "Nature is trying very hard to make us succeed, but nature does not depend on us. We are not the only experiment.", author: "R. Buckminster Fuller" },
+  { text: "I look for what needs to be done. After all, that's how the universe designs itself.", author: "R. Buckminster Fuller" },
+  { text: "You never change things by fighting the existing reality. To change something, build a new model that makes the existing model obsolete.", author: "R. Buckminster Fuller" },
+  { text: "If you want to teach people a new way of thinking, don't bother trying to teach them. Instead, give them a tool, the use of which will lead to new ways of thinking.", author: "R. Buckminster Fuller" },
+  { text: "Dare to be na\u00efve.", author: "R. Buckminster Fuller" },
+  { text: "Creativity belongs to the artist in each of us. To create means to relate. The root meaning of the word art is 'to fit together' and we all do this every day.", author: "Sister Corita Kent" },
+  { text: "Regard everything as an experiment.", author: "Sister Corita Kent" },
+  { text: "Nothing is a mistake. There's no win and no fail. There's only make.", author: "Sister Corita Kent" },
+  { text: "Design is everything. Everything!", author: "Paul Rand" },
+  { text: "Simplicity is not the goal. It is the by-product of a good idea and modest expectations.", author: "Paul Rand" },
+  { text: "Innovation leads one to see the new in the old and distinguishes the ingenious from the ingenuous.", author: "Paul Rand" },
+  { text: "People react positively when things are clear and understandable.", author: "Dieter Rams" },
+  { text: "Question everything generally thought to be obvious.", author: "Dieter Rams" },
+  { text: "Good design is making something intelligible and memorable. Great design is making something memorable and meaningful.", author: "Dieter Rams" },
+  { text: "The greatest threat to our planet is the belief that someone else will save it.", author: "Robert Swan" },
+  { text: "When one tugs at a single thing in nature, he finds it attached to the rest of the world.", author: "John Muir" },
+  { text: "The best effort we can make toward causing no unnecessary harm is to make the best quality products, ones that are durable, functional, beautiful and simple.", author: "Yvon Chouinard" },
+  { text: "The health of our home planet is the bottom line, and it's a responsibility we all must share.", author: "Yvon Chouinard" },
+  { text: "Focus on the causes, the philosophy tells us, not the symptoms.", author: "Yvon Chouinard" },
+  { text: "If you want to understand the entrepreneur, study the juvenile delinquent. The delinquent is saying with his actions, 'This sucks. I'm going to do my own thing.'", author: "Yvon Chouinard" },
+  { text: "The more you know, the less you need.", author: "Yvon Chouinard" },
+  { text: "The main trouble with design schools seems to be that they teach too much design and not enough about the ecological, social, economic, and political environment in which design takes place.", author: "Victor Papanek" },
+  { text: "Recognizing the need is the primary condition for design.", author: "Charles Eames" },
+  { text: "A dream you dream alone is only a dream. A dream you dream together is reality.", author: "Yoko Ono" },
+  { text: "An intellectual says a simple thing in a hard way. An artist says a hard thing in a simple way.", author: "Charles Bukowski" },
+  { text: "The free soul is rare, but you know it when you see it \u2014 basically because you feel good, very good, when you are near or with them.", author: "Charles Bukowski" },
+  { text: "The days run away like wild horses over the hills.", author: "Charles Bukowski" },
+  { text: "When you are sorrowful look again in your heart, and you shall see that in truth you are weeping for that which has been your delight.", author: "Kahlil Gibran" },
+  { text: "What we have once enjoyed we can never lose. All that we love deeply becomes a part of us.", author: "Helen Keller" },
+  { text: "The first step in the evolution of ethics is a sense of solidarity with other human beings.", author: "Albert Schweitzer" },
+  { text: "All labor that uplifts humanity has dignity and importance and should be undertaken with painstaking excellence.", author: "Martin Luther King, Jr." },
+  { text: "In order for imagination to flourish, there must be an opportunity to see things as other than they currently are or appear to be. This begins with a simple question: What if?", author: "Warren Berger" },
+  { text: "The first and simplest emotion which we discover in the human mind, is curiosity.", author: "Edmund Burke" },
+  { text: "There are no foolish questions, no man becomes a fool until he has stopped asking questions.", author: "Charles Proteus Steinmetz" },
+  { text: "We shape our tools and thereafter our tools shape us.", author: "Marshall McLuhan" },
+  { text: "There are no passengers on spaceship earth. We are all crew.", author: "Marshall McLuhan" },
+  { text: "Act the way you'd like to be and soon you'll be the way you act.", author: "Leonard Cohen" },
+  { text: "Desperation is the raw material of drastic change. Only those who can leave behind everything they have believed in can hope to escape.", author: "William S. Burroughs" },
+  { text: "There couldn't be a society of people who didn't dream. They'd be dead in two weeks.", author: "William S. Burroughs" },
+  { text: "It is certain, in any case, that ignorance, allied with power, is the most ferocious enemy justice can have.", author: "James Baldwin" },
+  { text: "The paradox of education is precisely this \u2014 that as one begins to become conscious one begins to examine the society in which he is being educated.", author: "James Baldwin" },
+  { text: "Those who say it can't be done are usually interrupted by others doing it.", author: "James Baldwin" },
+  { text: "When you want to know how things really work, study them when they're coming apart.", author: "William Gibson" },
+  { text: "Stand high long enough and your lightning will come.", author: "William Gibson" },
+  { text: "Words are never 'only words'; they matter because they define the contours of what we can do.", author: "Slavoj Zizek" },
+  { text: "Your children are not your children. They are the sons and daughters of Life's longing for itself.", author: "Kahlil Gibran" },
+  { text: "You cannot buy the revolution. You cannot make the revolution. You can only be the revolution. It is in your spirit, or it is nowhere.", author: "Ursula K. Le Guin" },
+  { text: "All that you touch You Change. All that you Change Changes you. The only lasting truth Is Change.", author: "Octavia Butler" },
+  { text: "Violence is the last refuge of the incompetent.", author: "Isaac Asimov" },
+  { text: "The soul becomes dyed with the colour of its thoughts.", author: "Marcus Aurelius" },
+  { text: "Folks are usually about as happy as they make their minds up to be.", author: "Abraham Lincoln" },
+  { text: "No two minds ever come together without a third invisible force, which may be likened to a 'third mind.'", author: "Napoleon Hill" },
+  { text: "Be kinder than necessary, for everyone is fighting some kind of battle.", author: "J.M. Barrie" },
+  { text: "Whether we and our politicians know it or not, Nature is party to all our deals and decisions, and she has more votes, a longer memory, and a sterner sense of justice than we do.", author: "Wendell Berry" },
+  { text: "Do unto those downstream as you would have those upstream do unto you.", author: "Wendell Berry" },
+  { text: "The care of the Earth is our most ancient and most worthy, and after all our most pleasing responsibility.", author: "Wendell Berry" },
+  { text: "The earth is what we all have in common.", author: "Wendell Berry" },
+  { text: "Every forest branch moves differently in the breeze, but as they sway they connect at the roots.", author: "Rumi" },
+  { text: "An infinity of forest lies dormant within the dreams of one acorn.", author: "Wayne W. Dyer" },
+  { text: "Tell me, what is it you plan to do with your one wild and precious life?", author: "Mary Oliver" },
+  { text: "Instructions for living a life. Pay attention. Be astonished. Tell about it.", author: "Mary Oliver" },
+  { text: "You must not ever stop being whimsical. And you must not, ever, give anyone else the responsibility for your life.", author: "Mary Oliver" },
+  { text: "Still, what I want in my life is to be willing to be dazzled \u2014 to cast aside the weight of facts and maybe even to float a little above this difficult world.", author: "Mary Oliver" },
+];
+
+function getDailyQuote() {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), 0, 0);
+  const dayOfYear = Math.floor((now - start) / 86400000);
+  return QUOTES[dayOfYear % QUOTES.length];
+}
+
 let accessToken = null;
 let emails = [];
 let threads = [];
@@ -144,6 +241,9 @@ let calEvents = [];
 let tokenClient = null;
 
 document.getElementById('todayLine').textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+const _dq = getDailyQuote();
+document.getElementById('dailyQuote').innerHTML = '\u201C' + _dq.text + '\u201D<div class="quote-author">\u2014 ' + _dq.author + '</div>';
 
 window.onload = function() {
   tokenClient = google.accounts.oauth2.initTokenClient({ client_id: CLIENT_ID, scope: SCOPES, callback: handleAuthResponse });
@@ -432,6 +532,7 @@ function renderEmails() {
   bar.className = 'summary-bar'; bar.classList.remove('hidden');
   bar.innerHTML = `<span>${emails.length} emails in ${threads.length} threads \u00B7 ${impCount} important</span><span class="tag">editable</span>`;
   document.getElementById('btnDownload').classList.remove('hidden');
+  document.getElementById('notesSection').classList.remove('hidden');
 
   const list = document.getElementById('emailList');
   list.innerHTML = '';
@@ -558,7 +659,7 @@ function xmlP(text, opts = {}) {
 }
 
 function xmlImage(rId, cx, cy) {
-  if (cx > 5486400) { const r = 5486400/cx; cx = 5486400; cy = Math.round(cy*r); }
+  if (cx > 8229600) { const r = 8229600/cx; cx = 8229600; cy = Math.round(cy*r); }
   return `<w:p><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="1" name="Image"/><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="0" name="Image"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${rId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`;
 }
 
@@ -600,7 +701,24 @@ async function downloadDocx() {
     body += `<w:p><w:pPr><w:spacing w:after="20"/><w:pBdr><w:bottom w:val="single" w:sz="8" w:color="3D4A2A"/></w:pBdr></w:pPr></w:p>`;
     body += xmlP(todayStr, { font:'Arial', size:22, color:'6B7A4F', before:80 });
     body += xmlP(emails.length + ' emails in ' + threads.length + ' threads', { font:'Arial', size:18, color:'C8C0B4', before:40 });
+
+    // Daily quote on cover
+    const dq = getDailyQuote();
+    body += '<w:p><w:pPr><w:spacing w:before="400"/></w:pPr></w:p>';
+    body += `<w:p><w:pPr><w:spacing w:before="80" w:after="40"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Georgia" w:hAnsi="Georgia"/><w:sz w:val="22"/><w:i/><w:color w:val="6B7A4F"/></w:rPr><w:t xml:space="preserve">\u201C${escXml(dq.text)}\u201D</w:t></w:r></w:p>`;
+    body += xmlP('\u2014 ' + dq.author, { font:'Arial', size:16, color:'3D4A2A', before:40, bold:true });
+
     body += '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
+
+    // Notes in docx
+    const notesText = (document.getElementById('notesArea').value || '').trim();
+    if (notesText) {
+      body += `<w:p><w:pPr><w:spacing w:before="0" w:after="80"/><w:pBdr><w:bottom w:val="single" w:sz="8" w:color="D4E157"/></w:pBdr></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Georgia" w:hAnsi="Georgia"/><w:sz w:val="28"/><w:b/><w:color w:val="3D4A2A"/></w:rPr><w:t xml:space="preserve">Notes</w:t></w:r></w:p>`;
+      notesText.split('\n').forEach(line => {
+        body += xmlP(line || ' ', { font:'Arial', size:20, color:'2C2C2C', after:60 });
+      });
+      body += '<w:p><w:pPr><w:spacing w:before="200"/></w:pPr></w:p>';
+    }
 
     // Calendar in docx
     if (calEvents.length > 0) {
@@ -689,7 +807,7 @@ async function downloadDocx() {
     const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" xmlns:mo="http://schemas.microsoft.com/office/mac/office/2008/main" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:w10="urn:schemas-microsoft-com:office:word" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml">
 <w:body>${body}
-<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>
+<w:sectPr><w:pgSz w:w="15840" w:h="24480"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>
 </w:body></w:document>`;
 
     const extSet = new Set();
