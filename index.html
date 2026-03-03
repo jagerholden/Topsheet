@@ -343,9 +343,13 @@ function getAttachments(payload, msgId) {
       const isImage = (p.mimeType || '').startsWith('image/');
       const sz = p.body.size || 0;
       const fn = (p.filename || '').toLowerCase();
-      const sigNames = ['image001','image002','image003','image004','image005','logo','signature','banner','icon','footer'];
-      const isSig = isImage && (sz < 15000 || sigNames.some(s => fn.includes(s)));
-      if (isSig) return;
+      // Filter signature images: small images or generic names
+      const sigNames = ['image001','image002','image003','image004','image005','logo','signature','banner','icon','footer','header'];
+      const isSigImage = isImage && (sz < 15000 || sigNames.some(s => fn.includes(s)));
+      // Filter signature files: contact cards, tiny files
+      const sigExts = ['.vcf','.ics','.htm','.html'];
+      const isSigFile = sigExts.some(e => fn.endsWith(e)) || (!isImage && sz < 500);
+      if (isSigImage || isSigFile) return;
       att.push({
         filename: p.filename, mimeType: p.mimeType || 'file', size: sz,
         attachmentId: p.body.attachmentId || null, msgId: msgId, isImage: isImage,
@@ -359,17 +363,117 @@ function getAttachments(payload, msgId) {
 }
 
 function extractLinks(rawBody) {
-  if (!rawBody) return [];
+  if (!rawBody) return { priority: [], regular: [], signature: [] };
   const matches = rawBody.match(/https?:\/\/[^\s\r\n<>"'\)\]]+/gi) || [];
-  const skip = ['google.com/calendar','accounts.google','unsubscribe','manage-preferences','tracking','click.','list-manage','mailchimp'];
+
+  // --- File sharing / creative review platforms = PRIORITY ---
+  const priorityPatterns = [
+    { p: /drive\.google\.com/i, l: 'GOOGLE DRIVE' },
+    { p: /docs\.google\.com\/(?!forms)/i, l: 'GOOGLE DOCS' },
+    { p: /sheets\.google\.com/i, l: 'GOOGLE SHEETS' },
+    { p: /slides\.google\.com/i, l: 'GOOGLE SLIDES' },
+    { p: /wetransfer\.com|we\.tl/i, l: 'WETRANSFER' },
+    { p: /dropbox\.com/i, l: 'DROPBOX' },
+    { p: /box\.com\/s\//i, l: 'BOX' },
+    { p: /onedrive\.live\.com|1drv\.ms/i, l: 'ONEDRIVE' },
+    { p: /f\.io\//i, l: 'FRAME.IO' },
+    { p: /frame\.io\//i, l: 'FRAME.IO' },
+    { p: /vimeo\.com/i, l: 'VIMEO' },
+    { p: /figma\.com\/(file|proto|design)/i, l: 'FIGMA' },
+    { p: /canva\.com\/design/i, l: 'CANVA' },
+    { p: /miro\.com\/app/i, l: 'MIRO' },
+    { p: /notion\.so\//i, l: 'NOTION' },
+    { p: /airtable\.com/i, l: 'AIRTABLE' },
+    { p: /loom\.com\/share/i, l: 'LOOM' },
+    { p: /\.pdf($|\?)/i, l: 'PDF' },
+    { p: /\.docx?($|\?)/i, l: 'DOCUMENT' },
+    { p: /\.xlsx?($|\?)/i, l: 'SPREADSHEET' },
+    { p: /\.pptx?($|\?)/i, l: 'PRESENTATION' },
+    { p: /\.zip($|\?)/i, l: 'ZIP' },
+    { p: /\.ai($|\?)/i, l: 'ILLUSTRATOR' },
+    { p: /\.psd($|\?)/i, l: 'PHOTOSHOP' },
+    { p: /\.indd($|\?)/i, l: 'INDESIGN' },
+    { p: /\.eps($|\?)/i, l: 'EPS' },
+    { p: /\.svg($|\?)/i, l: 'SVG' },
+    { p: /\.mov($|\?)/i, l: 'VIDEO' },
+    { p: /\.mp4($|\?)/i, l: 'VIDEO' },
+  ];
+
+  // --- Signature / noise = always filter out ---
+  const sigPatterns = [
+    // Social media (any path — catches /solidarityofunbridledlabour etc.)
+    /linkedin\.com/i, /twitter\.com/i, /x\.com\//i,
+    /facebook\.com/i, /fb\.com/i, /fb\.me/i,
+    /instagram\.com/i, /nstagram\.com/i,
+    /youtube\.com/i, /youtu\.be/i,
+    /tiktok\.com/i, /pinterest\.com/i,
+    /threads\.net/i, /bsky\.app/i, /mastodon/i,
+    // Email / calendar / auth infrastructure
+    /google\.com\/calendar/i, /accounts\.google/i,
+    /outlook\.live/i, /outlook\.office/i,
+    // Unsubscribe / email management
+    /unsubscribe/i, /manage-preferences/i, /email-preferences/i,
+    /list-manage/i, /mailchimp/i, /campaign-archive/i,
+    /opt-out/i, /email-settings/i, /notification-settings/i,
+    // Tracking / click redirects / analytics
+    /click\./i, /track\./i, /t\.co\//i, /bit\.ly\//i,
+    /redirect/i, /trk\./i, /opens\./i, /pixel/i,
+    /sendgrid/i, /mailgun/i, /constantcontact/i,
+    /hubspot/i, /marketo/i, /pardot/i, /eloqua/i,
+    // Legal / corporate boilerplate
+    /\/privacy/i, /\/terms/i, /\/legal/i, /\/disclaimer/i,
+    /\/cookie/i, /\/gdpr/i, /\/compliance/i,
+    // Scheduling (not MJ)
+    /calendly\.com(?!\/mjager)/i, /doodle\.com/i,
+    /chili-piper/i, /acuityscheduling/i,
+    // Image / avatar hosting
+    /gravatar\.com/i, /googleusercontent\.com/i,
+    /wp-content\/uploads.*\.(png|jpg|gif)/i,
+    /\.gif($|\?)/i, /\.png($|\?)/i, /\.jpg($|\?)/i,
+    // App stores
+    /apps\.apple\.com/i, /play\.google\.com\/store/i,
+    // Signature builders
+    /wisestamp/i, /hubsignature/i, /sigstr/i,
+    /rocketseed/i, /newoldstamp/i, /exclaimer/i,
+    // Generic website homepages (domain only, or domain/ only)
+    /^https?:\/\/(www\.)?[^\/]+\/?$/i,
+  ];
+
+  // Detect signature boundary
+  let sigBoundary = rawBody.length;
+  const sigMarkers = [/\n--\s*\n/, /\n_{3,}\s*\n/, /\nSent from my /i, /\nGet Outlook for /i];
+  for (const marker of sigMarkers) {
+    const m = rawBody.search(marker);
+    if (m > 0 && m < sigBoundary) sigBoundary = m;
+  }
+
+  // Also detect clusters of URLs at the end — 3+ URLs in the last 20% of the body = signature block
+  const bodyLen = rawBody.length;
+  const tail20 = Math.floor(bodyLen * 0.8);
+  let tailUrlCount = 0;
+  matches.forEach(url => { const pos = rawBody.indexOf(url); if (pos >= tail20) tailUrlCount++; });
+  const tailIsSig = tailUrlCount >= 3;
+
   const seen = new Set();
-  return matches.filter(url => {
+  const priority = [], regular = [], signature = [];
+  matches.forEach(url => {
     const lower = url.toLowerCase();
-    if (seen.has(lower)) return false;
-    if (skip.some(s => lower.includes(s))) return false;
+    if (seen.has(lower)) return;
     seen.add(lower);
-    return true;
+    const urlPos = rawBody.indexOf(url);
+    // Check priority first — these always surface
+    const priMatch = priorityPatterns.find(pp => pp.p.test(url));
+    if (priMatch) { priority.push({ url, label: priMatch.l }); return; }
+    // Check signature patterns
+    if (sigPatterns.some(p => p.test(url))) { signature.push(url); return; }
+    // Check if URL is after signature boundary
+    if (urlPos >= 0 && urlPos >= sigBoundary) { signature.push(url); return; }
+    // Check if URL is in a tail cluster
+    if (tailIsSig && urlPos >= tail20) { signature.push(url); return; }
+    // Everything else
+    regular.push(url);
   });
+  return { priority, regular, signature };
 }
 
 // ─── Progress UI ────────────────────────────────────
@@ -417,6 +521,7 @@ async function pullEmails() {
       const headers = msg.payload ? msg.payload.headers || [] : [];
 
       const rawBody = decodeBody(msg.payload);
+      const classifiedLinks = extractLinks(rawBody);
       emails.push({
         id: ids[i].id,
         threadId: ids[i].threadId || msg.threadId || ids[i].id,
@@ -425,7 +530,7 @@ async function pullEmails() {
         cc: getHeader(headers, 'Cc'),
         subject: getHeader(headers, 'Subject'),
         body: cleanBody(rawBody),
-        links: extractLinks(rawBody),
+        links: classifiedLinks,
         date: msg.internalDate,
         dateFormatted: fmtDate(msg.internalDate) + ' at ' + fmtTime(msg.internalDate),
         attachments: getAttachments(msg.payload, ids[i].id),
@@ -652,27 +757,10 @@ function renderEmails() {
 
       let linksHtml = '';
       let priorityHtml = '';
-      const priorityPatterns = [
-        { p: /drive\.google\.com/i, l: 'GOOGLE DRIVE' },
-        { p: /docs\.google\.com/i, l: 'GOOGLE DOCS' },
-        { p: /wetransfer\.com|we\.tl/i, l: 'WETRANSFER' },
-        { p: /dropbox\.com/i, l: 'DROPBOX' },
-        { p: /box\.com\/s\//i, l: 'BOX' },
-        { p: /onedrive\.live\.com|1drv\.ms/i, l: 'ONEDRIVE' },
-        { p: /\.pdf($|\?)/i, l: 'PDF' },
-        { p: /\.docx?($|\?)/i, l: 'DOCUMENT' },
-        { p: /\.xlsx?($|\?)/i, l: 'SPREADSHEET' },
-        { p: /\.pptx?($|\?)/i, l: 'PRESENTATION' },
-        { p: /\.zip($|\?)/i, l: 'ZIP' },
-        { p: /\.ai($|\?)/i, l: 'ILLUSTRATOR' },
-        { p: /\.psd($|\?)/i, l: 'PHOTOSHOP' },
-        { p: /\.eps($|\?)/i, l: 'EPS' },
-      ];
-      const priLinks = []; const regLinks = [];
-      (em.links || []).forEach(url => {
-        const m = priorityPatterns.find(pp => pp.p.test(url));
-        if (m) priLinks.push({ url, label: m.l }); else regLinks.push(url);
-      });
+      const priLinks = (em.links && em.links.priority) || [];
+      const regLinks = (em.links && em.links.regular) || [];
+      const sigLinks = (em.links && em.links.signature) || [];
+
       if (priLinks.length > 0) {
         priorityHtml = '<div class="priority-downloads"><div class="pd-label">DOWNLOAD / PRINT</div>';
         priLinks.forEach(pl => {
@@ -689,9 +777,10 @@ function renderEmails() {
       }
 
       const hasAtt = em.attachments.length > 0;
-      const hasLinks = em.links && em.links.length > 0;
+      const hasPri = priLinks.length > 0;
+      const hasAnyLinks = priLinks.length + regLinks.length > 0;
       const attBadge = hasAtt ? `<span class="badge-attach">${em.attachments.length} ATTACHMENT${em.attachments.length>1?'S':''}</span>` : '';
-      const linkBadge = hasLinks ? `<span class="badge-links">${em.links.length} LINK${em.links.length>1?'S':''}</span>` : '';
+      const linkBadge = hasPri ? `<span class="badge-links">${priLinks.length} FILE${priLinks.length>1?'S':''}</span>` : (hasAnyLinks ? `<span class="badge-links">${regLinks.length} LINK${regLinks.length>1?'S':''}</span>` : '');
 
       card.innerHTML = `
         <div class="email-counter"><span>${String(gi+1).padStart(2,'0')}/${String(emails.length).padStart(2,'0')}</span>${em.important ? '<span class="badge-important">IMPORTANT</span>' : ''}${attBadge}${linkBadge}<button class="btn-remove" onclick="removeEmail('${em.id}')">REMOVE</button></div>
@@ -972,18 +1061,16 @@ async function downloadDocx() {
         }
 
         // Links in email — priority first
-        if (em.links && em.links.length > 0) {
-          const pPat = [/drive\.google\.com/i,/docs\.google\.com/i,/wetransfer\.com|we\.tl/i,/dropbox\.com/i,/box\.com\/s\//i,/onedrive/i,/\.pdf($|\?)/i,/\.docx?($|\?)/i,/\.xlsx?($|\?)/i,/\.pptx?($|\?)/i,/\.zip($|\?)/i];
-          const pri = em.links.filter(u => pPat.some(p => p.test(u)));
-          const reg = em.links.filter(u => !pPat.some(p => p.test(u)));
-          if (pri.length > 0) {
-            body += xmlP('DOWNLOAD / PRINT', { font:'Arial', size:16, bold:true, color:'D4E157', before:120, after:40 });
-            pri.forEach(url => { body += xmlP('  ' + url, { font:'Courier New', size:16, color:'6B7A4F', after:20 }); });
-          }
-          if (reg.length > 0) {
-            body += xmlP('OTHER LINKS', { font:'Arial', size:16, bold:true, color:'6B7A4F', before:120, after:40 });
-            reg.forEach(url => { body += xmlP('  ' + url, { font:'Courier New', size:16, color:'6B7A4F', after:20 }); });
-          }
+        // Priority download links
+        const docPri = (em.links && em.links.priority) || [];
+        const docReg = (em.links && em.links.regular) || [];
+        if (docPri.length > 0) {
+          body += xmlP('DOWNLOAD / PRINT', { font:'Arial', size:16, bold:true, color:'D4E157', before:120, after:40 });
+          docPri.forEach(pl => { body += xmlP('  [' + pl.label + ']  ' + pl.url, { font:'Courier New', size:16, color:'6B7A4F', after:20 }); });
+        }
+        if (docReg.length > 0) {
+          body += xmlP('OTHER LINKS', { font:'Arial', size:16, bold:true, color:'6B7A4F', before:120, after:40 });
+          docReg.forEach(url => { body += xmlP('  ' + url, { font:'Courier New', size:16, color:'6B7A4F', after:20 }); });
         }
       });
     });
