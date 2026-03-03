@@ -90,6 +90,13 @@
   .link-item { display: block; font-family: var(--mono); font-size: 11px; margin-top: 4px; word-break: break-all; line-height: 1.5; }
   .link-item a { color: var(--dark-olive); text-decoration: underline; text-underline-offset: 2px; }
   .link-item a:hover { color: var(--olive); }
+  .priority-downloads { margin: 12px 0; padding: 12px 14px; background: var(--dark-olive); border-radius: 5px; }
+  .priority-downloads .pd-label { font-family: var(--sans); font-size: 10px; font-weight: 700; color: var(--lime); letter-spacing: 0.08em; margin-bottom: 8px; }
+  .priority-downloads .pd-item { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+  .priority-downloads .pd-type { font-family: var(--mono); font-size: 9px; font-weight: 700; color: var(--dark-olive); background: var(--lime); padding: 2px 8px; border-radius: 2px; flex-shrink: 0; }
+  .priority-downloads .pd-link { font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,0.7); word-break: break-all; flex: 1; }
+  .priority-downloads .pd-btn { font-family: var(--sans); font-size: 11px; font-weight: 700; color: var(--dark-olive); background: var(--lime); border: none; border-radius: 3px; padding: 6px 14px; cursor: pointer; text-decoration: none; flex-shrink: 0; transition: opacity 0.15s; }
+  .priority-downloads .pd-btn:hover { opacity: 0.85; }
 
   .btn-remove { float: right; font-family: var(--sans); font-size: 10px; font-weight: 600; padding: 4px 10px; background: transparent; color: var(--div); border: 1px solid var(--div); border-radius: 2px; cursor: pointer; transition: all 0.15s; letter-spacing: 0.03em; }
   .btn-remove:hover { background: #FEE2E2; color: #991B1B; border-color: #FECACA; }
@@ -644,10 +651,39 @@ function renderEmails() {
       }
 
       let linksHtml = '';
-      if (em.links && em.links.length > 0) {
-        linksHtml = '<div class="link-section"><span class="att-label">LINKS IN THIS EMAIL</span>';
-        em.links.forEach(url => {
-          linksHtml += `<div class="link-item"><a href="${escHtml(url)}" target="_blank" rel="noopener">${escHtml(url.length > 80 ? url.substring(0,77) + '...' : url)}</a></div>`;
+      let priorityHtml = '';
+      const priorityPatterns = [
+        { p: /drive\.google\.com/i, l: 'GOOGLE DRIVE' },
+        { p: /docs\.google\.com/i, l: 'GOOGLE DOCS' },
+        { p: /wetransfer\.com|we\.tl/i, l: 'WETRANSFER' },
+        { p: /dropbox\.com/i, l: 'DROPBOX' },
+        { p: /box\.com\/s\//i, l: 'BOX' },
+        { p: /onedrive\.live\.com|1drv\.ms/i, l: 'ONEDRIVE' },
+        { p: /\.pdf($|\?)/i, l: 'PDF' },
+        { p: /\.docx?($|\?)/i, l: 'DOCUMENT' },
+        { p: /\.xlsx?($|\?)/i, l: 'SPREADSHEET' },
+        { p: /\.pptx?($|\?)/i, l: 'PRESENTATION' },
+        { p: /\.zip($|\?)/i, l: 'ZIP' },
+        { p: /\.ai($|\?)/i, l: 'ILLUSTRATOR' },
+        { p: /\.psd($|\?)/i, l: 'PHOTOSHOP' },
+        { p: /\.eps($|\?)/i, l: 'EPS' },
+      ];
+      const priLinks = []; const regLinks = [];
+      (em.links || []).forEach(url => {
+        const m = priorityPatterns.find(pp => pp.p.test(url));
+        if (m) priLinks.push({ url, label: m.l }); else regLinks.push(url);
+      });
+      if (priLinks.length > 0) {
+        priorityHtml = '<div class="priority-downloads"><div class="pd-label">DOWNLOAD / PRINT</div>';
+        priLinks.forEach(pl => {
+          priorityHtml += `<div class="pd-item"><span class="pd-type">${pl.label}</span><span class="pd-link">${escHtml(pl.url.length>60?pl.url.substring(0,57)+'...':pl.url)}</span><a class="pd-btn" href="${escHtml(pl.url)}" target="_blank" rel="noopener">Open &amp; Download</a></div>`;
+        });
+        priorityHtml += '</div>';
+      }
+      if (regLinks.length > 0) {
+        linksHtml = '<div class="link-section"><span class="att-label">OTHER LINKS</span>';
+        regLinks.forEach(url => {
+          linksHtml += `<div class="link-item"><a href="${escHtml(url)}" target="_blank" rel="noopener">${escHtml(url.length>80?url.substring(0,77)+'...':url)}</a></div>`;
         });
         linksHtml += '</div>';
       }
@@ -660,6 +696,7 @@ function renderEmails() {
       card.innerHTML = `
         <div class="email-counter"><span>${String(gi+1).padStart(2,'0')}/${String(emails.length).padStart(2,'0')}</span>${em.important ? '<span class="badge-important">IMPORTANT</span>' : ''}${attBadge}${linkBadge}<button class="btn-remove" onclick="removeEmail('${em.id}')">REMOVE</button></div>
         <div class="email-subject" contenteditable onblur="updateEmail(${gi},'subject',this.textContent)">${escHtml(em.subject || 'No Subject')}</div>
+        ${priorityHtml}
         ${metaHtml}
         <div class="email-body" contenteditable onblur="updateEmail(${gi},'body',this.textContent)">${escHtml(em.body)}</div>
         ${imgHtml}${attHtml}${linksHtml}`;
@@ -934,10 +971,19 @@ async function downloadDocx() {
           nonImg.forEach(a => { body += xmlP('  ' + a.filename + ' (' + a.mimeType + (a.size ? ', ' + Math.round(a.size/1024) + 'KB' : '') + ')', { font:'Courier New', size:18, color:'6B7A4F', after:20 }); });
         }
 
-        // Links in email
+        // Links in email — priority first
         if (em.links && em.links.length > 0) {
-          body += xmlP('LINKS', { font:'Arial', size:16, bold:true, color:'6B7A4F', before:120, after:40 });
-          em.links.forEach(url => { body += xmlP('  ' + url, { font:'Courier New', size:16, color:'6B7A4F', after:20 }); });
+          const pPat = [/drive\.google\.com/i,/docs\.google\.com/i,/wetransfer\.com|we\.tl/i,/dropbox\.com/i,/box\.com\/s\//i,/onedrive/i,/\.pdf($|\?)/i,/\.docx?($|\?)/i,/\.xlsx?($|\?)/i,/\.pptx?($|\?)/i,/\.zip($|\?)/i];
+          const pri = em.links.filter(u => pPat.some(p => p.test(u)));
+          const reg = em.links.filter(u => !pPat.some(p => p.test(u)));
+          if (pri.length > 0) {
+            body += xmlP('DOWNLOAD / PRINT', { font:'Arial', size:16, bold:true, color:'D4E157', before:120, after:40 });
+            pri.forEach(url => { body += xmlP('  ' + url, { font:'Courier New', size:16, color:'6B7A4F', after:20 }); });
+          }
+          if (reg.length > 0) {
+            body += xmlP('OTHER LINKS', { font:'Arial', size:16, bold:true, color:'6B7A4F', before:120, after:40 });
+            reg.forEach(url => { body += xmlP('  ' + url, { font:'Courier New', size:16, color:'6B7A4F', after:20 }); });
+          }
         }
       });
     });
