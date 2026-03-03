@@ -92,12 +92,20 @@
   .notes-area:focus { border-color: var(--olive); }
   .notes-area::placeholder { color: var(--div); }
   .cal-header { font-family: var(--serif); font-size: 22px; font-weight: 600; color: var(--dark-olive); margin: 0 0 16px; padding-bottom: 8px; border-bottom: 2px solid var(--lime); }
-  .cal-event { display: flex; gap: 14px; padding: 10px 14px; margin-bottom: 8px; background: var(--white); border: 1px solid var(--div); border-radius: 4px; align-items: flex-start; }
-  .cal-time { font-family: var(--mono); font-size: 11px; color: var(--olive); min-width: 90px; padding-top: 2px; }
+  .cal-day-label { font-family: var(--sans); font-size: 15px; font-weight: 700; color: var(--olive); margin: 20px 0 10px; letter-spacing: 0.03em; }
+  .cal-event { padding: 14px 18px; margin-bottom: 14px; background: var(--white); border: 1px solid var(--div); border-radius: 4px; }
+  .cal-event-top { display: flex; gap: 16px; align-items: flex-start; }
+  .cal-time { font-family: var(--mono); font-size: 13px; color: var(--olive); min-width: 120px; padding-top: 3px; }
   .cal-details { flex: 1; }
-  .cal-title { font-size: 14px; font-weight: 600; color: var(--dark-olive); }
-  .cal-loc { font-size: 11px; color: var(--olive); margin-top: 2px; }
-  .cal-allday { font-family: var(--mono); font-size: 11px; color: var(--lime); background: var(--dark-olive); padding: 1px 6px; border-radius: 2px; }
+  .cal-title { font-size: 17px; font-weight: 600; color: var(--dark-olive); line-height: 1.3; }
+  .cal-loc { font-size: 13px; color: var(--olive); margin-top: 4px; }
+  .cal-allday { font-family: var(--mono); font-size: 12px; color: var(--lime); background: var(--dark-olive); padding: 2px 8px; border-radius: 2px; }
+  .cal-meta-row { display: flex; align-items: center; gap: 12px; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(200,192,180,0.3); }
+  .cal-toggle-btn { font-family: var(--mono); font-size: 10px; font-weight: 600; padding: 3px 10px; border-radius: 2px; border: 1px solid var(--div); background: var(--cream); color: var(--olive); cursor: pointer; transition: all 0.15s; }
+  .cal-toggle-btn.active { background: var(--dark-olive); color: var(--white); border-color: var(--dark-olive); }
+  .cal-event-notes { width: 100%; margin-top: 8px; padding: 8px 10px; font-family: var(--sans); font-size: 12px; color: var(--char); background: var(--cream); border: 1px solid rgba(200,192,180,0.3); border-radius: 3px; outline: none; resize: none; min-height: 28px; line-height: 1.5; }
+  .cal-event-notes:focus { border-color: var(--olive); }
+  .cal-event-notes::placeholder { color: var(--div); font-style: italic; }
   .cal-section-gap { margin-bottom: 32px; }
 
   .hidden { display: none; }
@@ -456,6 +464,8 @@ async function pullEmails() {
           attendees: (ev.attendees || []).map(a => a.displayName || a.email).filter(Boolean),
           status: ev.status,
           hangoutLink: ev.hangoutLink || '',
+          mode: 'remote',
+          eventNotes: '',
         }));
       }
     } catch { /* calendar optional — don't fail the whole pull */ }
@@ -501,11 +511,12 @@ function renderCalendar() {
   list.innerHTML = '';
   dayGroups.forEach(group => {
     const dayLabel = document.createElement('div');
-    dayLabel.style.cssText = 'font-family:var(--sans);font-size:13px;font-weight:700;color:var(--olive);margin:14px 0 6px;letter-spacing:0.03em;';
+    dayLabel.className = 'cal-day-label';
     dayLabel.textContent = group.date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
     list.appendChild(dayLabel);
 
-    group.events.forEach(ev => {
+    group.events.forEach((ev, ei) => {
+      const globalIdx = calEvents.indexOf(ev);
       let timeStr = '';
       if (ev.allDay) {
         timeStr = '<span class="cal-allday">ALL DAY</span>';
@@ -516,12 +527,38 @@ function renderCalendar() {
       }
       const loc = ev.location ? '<div class="cal-loc">' + escHtml(ev.location) + '</div>' : '';
       const att = ev.attendees.length > 0 ? '<div class="cal-loc">' + escHtml(ev.attendees.slice(0, 5).join(', ')) + (ev.attendees.length > 5 ? ' +' + (ev.attendees.length - 5) + ' more' : '') + '</div>' : '';
+
+      const isRemote = ev.mode === 'remote';
       const card = document.createElement('div');
       card.className = 'cal-event';
-      card.innerHTML = `<div class="cal-time">${timeStr}</div><div class="cal-details"><div class="cal-title">${escHtml(ev.summary)}</div>${loc}${att}</div>`;
+      card.innerHTML = `
+        <div class="cal-event-top">
+          <div class="cal-time">${timeStr}</div>
+          <div class="cal-details">
+            <div class="cal-title">${escHtml(ev.summary)}</div>
+            ${loc}${att}
+          </div>
+        </div>
+        <div class="cal-meta-row">
+          <span class="cal-toggle-btn ${isRemote ? 'active' : ''}" onclick="toggleCalMode(${globalIdx},'remote',this)">REMOTE</span>
+          <span class="cal-toggle-btn ${!isRemote ? 'active' : ''}" onclick="toggleCalMode(${globalIdx},'in-person',this)">IN-PERSON</span>
+        </div>
+        <textarea class="cal-event-notes" placeholder="Add a note about this event..." rows="1" onblur="updateCalNote(${globalIdx},this.value)">${escHtml(ev.eventNotes)}</textarea>
+      `;
       list.appendChild(card);
     });
   });
+}
+
+function toggleCalMode(idx, mode, el) {
+  if (calEvents[idx]) calEvents[idx].mode = mode;
+  const row = el.parentElement;
+  row.querySelectorAll('.cal-toggle-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+}
+
+function updateCalNote(idx, val) {
+  if (calEvents[idx]) calEvents[idx].eventNotes = val;
 }
 
 // ─── Render Emails ──────────────────────────────────
@@ -658,6 +695,26 @@ function xmlP(text, opts = {}) {
   return `<w:p><w:pPr><w:spacing w:before="${before}" w:after="${after}"/>${border}</w:pPr><w:r><w:rPr><w:rFonts w:ascii="${font}" w:hAnsi="${font}"/><w:sz w:val="${size}"/><w:color w:val="${color}"/>${bold?'<w:b/>':''}</w:rPr><w:t xml:space="preserve">${escXml(text)}</w:t></w:r></w:p>`;
 }
 
+function getImageDims(bytes, mime) {
+  try {
+    if (mime.includes('png') && bytes[0]===0x89 && bytes[1]===0x50) {
+      const w=(bytes[16]<<24)|(bytes[17]<<16)|(bytes[18]<<8)|bytes[19];
+      const h=(bytes[20]<<24)|(bytes[21]<<16)|(bytes[22]<<8)|bytes[23];
+      if (w>0&&h>0) return {w,h};
+    }
+    if (mime.includes('jpeg')||mime.includes('jpg')) {
+      for (let i=0;i<bytes.length-10;i++) {
+        if (bytes[i]===0xFF&&(bytes[i+1]===0xC0||bytes[i+1]===0xC2)) {
+          const h=(bytes[i+5]<<8)|bytes[i+6];
+          const w=(bytes[i+7]<<8)|bytes[i+8];
+          if (w>0&&h>0) return {w,h};
+        }
+      }
+    }
+  } catch(e){}
+  return {w:400,h:300};
+}
+
 function xmlImage(rId, cx, cy) {
   if (cx > 8229600) { const r = 8229600/cx; cx = 8229600; cy = Math.round(cy*r); }
   return `<w:p><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="1" name="Image"/><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="0" name="Image"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${rId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`;
@@ -689,6 +746,7 @@ async function downloadDocx() {
           imageFiles.push({ name: 'word/media/image' + imgIdx + '.' + ext, data: bytes });
           imageRels.push({ rId, target: 'media/image' + imgIdx + '.' + ext, type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image' });
           a._rId = rId;
+          a._dims = getImageDims(bytes, a.mimeType);
         }
       });
     });
@@ -729,7 +787,7 @@ async function downloadDocx() {
       const dayGroups = groupCalByDay(calEvents);
       dayGroups.forEach(group => {
         const dayLabel = group.date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-        body += xmlP(dayLabel, { font:'Arial', size:20, bold:true, color:'6B7A4F', before:160, after:60 });
+        body += xmlP(dayLabel, { font:'Arial', size:22, bold:true, color:'6B7A4F', before:200, after:80 });
 
         group.events.forEach(ev => {
           let timeStr = '';
@@ -741,10 +799,12 @@ async function downloadDocx() {
             timeStr = s.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit', hour12:true }) + ' \u2013 ' + e.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit', hour12:true });
           }
 
-          body += `<w:p><w:pPr><w:spacing w:before="100" w:after="20"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Courier New" w:hAnsi="Courier New"/><w:sz w:val="18"/><w:color w:val="6B7A4F"/></w:rPr><w:t xml:space="preserve">${escXml(timeStr)}    </w:t></w:r><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="22"/><w:b/><w:color w:val="3D4A2A"/></w:rPr><w:t xml:space="preserve">${escXml(ev.summary)}</w:t></w:r></w:p>`;
+          const modeLabel = ev.mode === 'in-person' ? '  [IN-PERSON]' : '  [REMOTE]';
+          body += `<w:p><w:pPr><w:spacing w:before="140" w:after="40"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Courier New" w:hAnsi="Courier New"/><w:sz w:val="20"/><w:color w:val="6B7A4F"/></w:rPr><w:t xml:space="preserve">${escXml(timeStr)}</w:t></w:r><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="24"/><w:b/><w:color w:val="3D4A2A"/></w:rPr><w:t xml:space="preserve">    ${escXml(ev.summary)}</w:t></w:r><w:r><w:rPr><w:rFonts w:ascii="Courier New" w:hAnsi="Courier New"/><w:sz w:val="16"/><w:color w:val="6B7A4F"/></w:rPr><w:t xml:space="preserve">${escXml(modeLabel)}</w:t></w:r></w:p>`;
 
-          if (ev.location) body += xmlP('    ' + ev.location, { font:'Arial', size:18, color:'6B7A4F', after:20 });
+          if (ev.location) body += xmlP('    ' + ev.location, { font:'Arial', size:20, color:'6B7A4F', after:20 });
           if (ev.attendees.length > 0) body += xmlP('    ' + ev.attendees.slice(0, 8).join(', ') + (ev.attendees.length > 8 ? ' +' + (ev.attendees.length - 8) + ' more' : ''), { font:'Arial', size:18, color:'C8C0B4', after:20 });
+          if (ev.eventNotes) body += xmlP('    ' + ev.eventNotes, { font:'Arial', size:20, color:'2C2C2C', before:40, after:60 });
         });
       });
     }
@@ -787,7 +847,15 @@ async function downloadDocx() {
 
         // Inline images
         em.attachments.forEach(a => {
-          if (a.isImage && a._rId) body += xmlImage(a._rId, 3657600, 2743200);
+          if (a.isImage && a._rId) {
+            const d = a._dims || {w:400,h:300};
+            const maxW = 8229600;
+            const px2e = 9525;
+            let imgCx = d.w * px2e;
+            let imgCy = d.h * px2e;
+            if (imgCx > maxW) { const ratio = maxW/imgCx; imgCx = maxW; imgCy = Math.round(imgCy*ratio); }
+            body += xmlImage(a._rId, Math.round(imgCx), Math.round(imgCy));
+          }
         });
 
         // Non-image attachments
