@@ -80,8 +80,16 @@
   .meta-value[contenteditable] { outline: none; border-bottom: 1px dashed rgba(200,192,180,0.27); flex: 1; cursor: text; }
   .email-body { font-size: 12.5px; line-height: 1.6; color: var(--char); white-space: pre-wrap; word-break: break-word; margin-top: 12px; padding: 10px 12px; background: var(--cream); border-radius: 3px; border: 1px solid rgba(200,192,180,0.27); outline: none; cursor: text; min-height: 40px; max-height: 300px; overflow-y: auto; }
   .email-img { margin-top: 10px; max-width: 100%; border-radius: 3px; border: 1px solid var(--div); }
-  .att-label { font-size: 9px; font-weight: 700; color: var(--olive); letter-spacing: 0.05em; }
-  .att-item { font-family: var(--mono); font-size: 10px; color: var(--olive); margin-top: 3px; }
+  .att-label { font-size: 10px; font-weight: 700; color: var(--olive); letter-spacing: 0.05em; }
+  .att-item { font-family: var(--mono); font-size: 11px; color: var(--olive); margin-top: 3px; }
+  .badge-attach { font-family: var(--sans); font-size: 9px; font-weight: 700; color: #fff; background: var(--dark-olive); padding: 2px 8px; border-radius: 2px; margin-left: 6px; }
+  .badge-links { font-family: var(--sans); font-size: 9px; font-weight: 700; color: var(--dark-olive); background: var(--lime); padding: 2px 8px; border-radius: 2px; margin-left: 6px; }
+  .att-download { display: inline-block; font-family: var(--mono); font-size: 11px; color: var(--dark-olive); background: var(--cream); border: 1px solid var(--div); border-radius: 3px; padding: 5px 12px; margin: 3px 4px 3px 0; text-decoration: none; cursor: pointer; transition: all 0.15s; }
+  .att-download:hover { background: var(--lime); border-color: var(--lime); }
+  .link-section { margin-top: 10px; padding: 10px 12px; background: rgba(197,214,61,0.08); border: 1px solid rgba(197,214,61,0.25); border-radius: 4px; }
+  .link-item { display: block; font-family: var(--mono); font-size: 11px; margin-top: 4px; word-break: break-all; line-height: 1.5; }
+  .link-item a { color: var(--dark-olive); text-decoration: underline; text-underline-offset: 2px; }
+  .link-item a:hover { color: var(--olive); }
 
   .btn-remove { float: right; font-family: var(--sans); font-size: 10px; font-weight: 600; padding: 4px 10px; background: transparent; color: var(--div); border: 1px solid var(--div); border-radius: 2px; cursor: pointer; transition: all 0.15s; letter-spacing: 0.03em; }
   .btn-remove:hover { background: #FEE2E2; color: #991B1B; border-color: #FECACA; }
@@ -326,8 +334,13 @@ function getAttachments(payload, msgId) {
   function walk(p) {
     if (p.filename && p.filename.length > 0 && p.body) {
       const isImage = (p.mimeType || '').startsWith('image/');
+      const sz = p.body.size || 0;
+      const fn = (p.filename || '').toLowerCase();
+      const sigNames = ['image001','image002','image003','image004','image005','logo','signature','banner','icon','footer'];
+      const isSig = isImage && (sz < 15000 || sigNames.some(s => fn.includes(s)));
+      if (isSig) return;
       att.push({
-        filename: p.filename, mimeType: p.mimeType || 'file', size: p.body.size || 0,
+        filename: p.filename, mimeType: p.mimeType || 'file', size: sz,
         attachmentId: p.body.attachmentId || null, msgId: msgId, isImage: isImage,
         b64data: null
       });
@@ -336,6 +349,20 @@ function getAttachments(payload, msgId) {
   }
   walk(payload);
   return att;
+}
+
+function extractLinks(rawBody) {
+  if (!rawBody) return [];
+  const matches = rawBody.match(/https?:\/\/[^\s\r\n<>"'\)\]]+/gi) || [];
+  const skip = ['google.com/calendar','accounts.google','unsubscribe','manage-preferences','tracking','click.','list-manage','mailchimp'];
+  const seen = new Set();
+  return matches.filter(url => {
+    const lower = url.toLowerCase();
+    if (seen.has(lower)) return false;
+    if (skip.some(s => lower.includes(s))) return false;
+    seen.add(lower);
+    return true;
+  });
 }
 
 // ─── Progress UI ────────────────────────────────────
@@ -382,6 +409,7 @@ async function pullEmails() {
       const msg = await msgRes.json();
       const headers = msg.payload ? msg.payload.headers || [] : [];
 
+      const rawBody = decodeBody(msg.payload);
       emails.push({
         id: ids[i].id,
         threadId: ids[i].threadId || msg.threadId || ids[i].id,
@@ -389,7 +417,8 @@ async function pullEmails() {
         to: getHeader(headers, 'To'),
         cc: getHeader(headers, 'Cc'),
         subject: getHeader(headers, 'Subject'),
-        body: cleanBody(decodeBody(msg.payload)),
+        body: cleanBody(rawBody),
+        links: extractLinks(rawBody),
         date: msg.internalDate,
         dateFormatted: fmtDate(msg.internalDate) + ' at ' + fmtTime(msg.internalDate),
         attachments: getAttachments(msg.payload, ids[i].id),
@@ -600,19 +629,40 @@ function renderEmails() {
       });
 
       let attHtml = '';
-      const nonImg = em.attachments.filter(a => !a.isImage);
-      if (nonImg.length > 0) {
-        attHtml = '<div style="margin-top:10px"><span class="att-label">ATTACHMENTS</span>';
-        nonImg.forEach(a => { attHtml += '<div class="att-item">\uD83D\uDCCE ' + escHtml(a.filename) + ' (' + escHtml(a.mimeType) + (a.size ? ', ' + Math.round(a.size/1024) + 'KB' : '') + ')</div>'; });
-        attHtml += '</div>';
+      if (em.attachments.length > 0) {
+        attHtml = '<div style="margin-top:10px"><span class="att-label">ATTACHMENTS</span><div style="margin-top:6px">';
+        em.attachments.forEach(a => {
+          if (a.isImage && a.b64data) {
+            attHtml += `<a class="att-download" href="data:${a.mimeType};base64,${a.b64data}" download="${escHtml(a.filename)}">\uD83D\uDCCE ${escHtml(a.filename)}</a>`;
+          } else if (a.attachmentId) {
+            attHtml += `<a class="att-download" href="#" onclick="downloadAttachment('${a.msgId}','${a.attachmentId}','${escHtml(a.filename)}','${a.mimeType}');return false;">\uD83D\uDCCE ${escHtml(a.filename)} (${Math.round(a.size/1024)}KB)</a>`;
+          } else {
+            attHtml += `<span class="att-download">\uD83D\uDCCE ${escHtml(a.filename)} (${escHtml(a.mimeType)})</span>`;
+          }
+        });
+        attHtml += '</div></div>';
       }
 
+      let linksHtml = '';
+      if (em.links && em.links.length > 0) {
+        linksHtml = '<div class="link-section"><span class="att-label">LINKS IN THIS EMAIL</span>';
+        em.links.forEach(url => {
+          linksHtml += `<div class="link-item"><a href="${escHtml(url)}" target="_blank" rel="noopener">${escHtml(url.length > 80 ? url.substring(0,77) + '...' : url)}</a></div>`;
+        });
+        linksHtml += '</div>';
+      }
+
+      const hasAtt = em.attachments.length > 0;
+      const hasLinks = em.links && em.links.length > 0;
+      const attBadge = hasAtt ? `<span class="badge-attach">${em.attachments.length} ATTACHMENT${em.attachments.length>1?'S':''}</span>` : '';
+      const linkBadge = hasLinks ? `<span class="badge-links">${em.links.length} LINK${em.links.length>1?'S':''}</span>` : '';
+
       card.innerHTML = `
-        <div class="email-counter"><span>${String(gi+1).padStart(2,'0')}/${String(emails.length).padStart(2,'0')}</span>${em.important ? '<span class="badge-important">IMPORTANT</span>' : ''}<button class="btn-remove" onclick="removeEmail('${em.id}')">REMOVE</button></div>
+        <div class="email-counter"><span>${String(gi+1).padStart(2,'0')}/${String(emails.length).padStart(2,'0')}</span>${em.important ? '<span class="badge-important">IMPORTANT</span>' : ''}${attBadge}${linkBadge}<button class="btn-remove" onclick="removeEmail('${em.id}')">REMOVE</button></div>
         <div class="email-subject" contenteditable onblur="updateEmail(${gi},'subject',this.textContent)">${escHtml(em.subject || 'No Subject')}</div>
         ${metaHtml}
         <div class="email-body" contenteditable onblur="updateEmail(${gi},'body',this.textContent)">${escHtml(em.body)}</div>
-        ${imgHtml}${attHtml}`;
+        ${imgHtml}${attHtml}${linksHtml}`;
       group.appendChild(card);
     });
     list.appendChild(group);
@@ -641,6 +691,25 @@ function removeEmail(emailId) {
     }
   });
   renderEmails();
+}
+
+async function downloadAttachment(msgId, attId, filename, mimeType) {
+  if (!accessToken) return;
+  try {
+    const res = await fetch('https://www.googleapis.com/gmail/v1/users/me/messages/' + msgId + '/attachments/' + attId, { headers: { Authorization: 'Bearer ' + accessToken } });
+    const data = await res.json();
+    if (data.data) {
+      const b64 = data.data.replace(/-/g, '+').replace(/_/g, '/');
+      const byteChars = atob(b64);
+      const byteArr = new Uint8Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
+      const blob = new Blob([byteArr], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; a.click();
+      URL.revokeObjectURL(url);
+    }
+  } catch (err) { alert('Failed to download: ' + err.message); }
 }
 
 // ─── DOCX Generation (raw XML + ZIP, zero deps) ────
@@ -863,6 +932,12 @@ async function downloadDocx() {
         if (nonImg.length > 0) {
           body += xmlP('ATTACHMENTS', { font:'Arial', size:16, bold:true, color:'6B7A4F', before:120, after:40 });
           nonImg.forEach(a => { body += xmlP('  ' + a.filename + ' (' + a.mimeType + (a.size ? ', ' + Math.round(a.size/1024) + 'KB' : '') + ')', { font:'Courier New', size:18, color:'6B7A4F', after:20 }); });
+        }
+
+        // Links in email
+        if (em.links && em.links.length > 0) {
+          body += xmlP('LINKS', { font:'Arial', size:16, bold:true, color:'6B7A4F', before:120, after:40 });
+          em.links.forEach(url => { body += xmlP('  ' + url, { font:'Courier New', size:16, color:'6B7A4F', after:20 }); });
         }
       });
     });
