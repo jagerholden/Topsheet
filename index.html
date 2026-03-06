@@ -953,7 +953,7 @@ async function downloadDocx() {
     body += xmlP('Topsheet', { font:'Georgia', size:72, color:'3D4A2A', after:60 });
     body += `<w:p><w:pPr><w:spacing w:after="20"/><w:pBdr><w:bottom w:val="single" w:sz="8" w:color="3D4A2A"/></w:pBdr></w:pPr></w:p>`;
     body += xmlP(todayStr, { font:'Arial', size:24, color:'6B7A4F', before:80 });
-    body += xmlP(emails.length + ' emails in ' + threads.length + ' threads', { font:'Arial', size:20, color:'C8C0B4', before:40 });
+    body += xmlP(emails.length + ' emails in ' + threads.length + ' threads', { font:'Arial', size:26, color:'3D4A2A', before:40 });
 
     // Daily quote on cover
     const dq = getDailyQuote();
@@ -995,10 +995,10 @@ async function downloadDocx() {
           }
 
           const modeLabel = ev.mode === 'in-person' ? '  [IN-PERSON]' : '  [REMOTE]';
-          body += `<w:p><w:pPr><w:spacing w:before="140" w:after="40"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Courier New" w:hAnsi="Courier New"/><w:sz w:val="20"/><w:color w:val="6B7A4F"/></w:rPr><w:t xml:space="preserve">${escXml(timeStr)}</w:t></w:r><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="24"/><w:b/><w:color w:val="3D4A2A"/></w:rPr><w:t xml:space="preserve">    ${escXml(ev.summary)}</w:t></w:r><w:r><w:rPr><w:rFonts w:ascii="Courier New" w:hAnsi="Courier New"/><w:sz w:val="16"/><w:color w:val="6B7A4F"/></w:rPr><w:t xml:space="preserve">${escXml(modeLabel)}</w:t></w:r></w:p>`;
+          body += `<w:p><w:pPr><w:spacing w:before="160" w:after="40"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Courier New" w:hAnsi="Courier New"/><w:sz w:val="24"/><w:b/><w:color w:val="3D4A2A"/></w:rPr><w:t xml:space="preserve">${escXml(timeStr)}</w:t></w:r><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="28"/><w:b/><w:color w:val="2C2C2C"/></w:rPr><w:t xml:space="preserve">    ${escXml(ev.summary)}</w:t></w:r><w:r><w:rPr><w:rFonts w:ascii="Courier New" w:hAnsi="Courier New"/><w:sz w:val="20"/><w:b/><w:color w:val="3D4A2A"/></w:rPr><w:t xml:space="preserve">${escXml(modeLabel)}</w:t></w:r></w:p>`;
 
-          if (ev.location) body += xmlP('    ' + ev.location, { font:'Arial', size:20, color:'6B7A4F', after:20 });
-          if (ev.attendees.length > 0) body += xmlP('    ' + ev.attendees.slice(0, 8).join(', ') + (ev.attendees.length > 8 ? ' +' + (ev.attendees.length - 8) + ' more' : ''), { font:'Arial', size:18, color:'C8C0B4', after:20 });
+          if (ev.location) body += xmlP('    ' + ev.location, { font:'Arial', size:22, color:'3D4A2A', after:20 });
+          if (ev.attendees.length > 0) body += xmlP('    ' + ev.attendees.slice(0, 8).join(', ') + (ev.attendees.length > 8 ? ' +' + (ev.attendees.length - 8) + ' more' : ''), { font:'Arial', size:22, color:'4A5240', after:20 });
           if (ev.eventNotes) body += xmlP('    ' + ev.eventNotes, { font:'Arial', size:20, color:'2C2C2C', before:40, after:60 });
         });
       });
@@ -1024,20 +1024,20 @@ async function downloadDocx() {
 
         let counter = String(emailNum).padStart(2,'0') + ' / ' + String(emails.length).padStart(2,'0');
         if (em.important) counter += '   IMPORTANT';
-        body += xmlP(counter, { font:'Courier New', size:18, color:'C8C0B4', before:isChild?120:180, after:40, border:bdr });
+        body += xmlP(counter, { font:'Courier New', size:22, color:'3D4A2A', before:isChild?120:180, after:40, border:bdr });
         body += xmlP(em.subject || 'No Subject', { font:'Georgia', size:28, bold:true, color:'3D4A2A', before:40, after:120, border:bdr });
 
         const meta = [['FROM', em.from], ['TO', em.to]];
         if (em.cc) meta.push(['CC', em.cc]);
         meta.push(['DATE', em.dateFormatted]);
         meta.forEach(([label, value]) => {
-          body += `<w:p><w:pPr><w:spacing w:before="20" w:after="20"/>${bdr}</w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="16"/><w:b/><w:color w:val="6B7A4F"/></w:rPr><w:t xml:space="preserve">${escXml(label)}    </w:t></w:r><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="22"/><w:color w:val="2C2C2C"/></w:rPr><w:t xml:space="preserve">${escXml(value || '')}</w:t></w:r></w:p>`;
+          body += `<w:p><w:pPr><w:spacing w:before="30" w:after="30"/>${bdr}</w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="20"/><w:b/><w:color w:val="3D4A2A"/></w:rPr><w:t xml:space="preserve">${escXml(label)}    </w:t></w:r><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="24"/><w:color w:val="2C2C2C"/></w:rPr><w:t xml:space="preserve">${escXml(value || '')}</w:t></w:r></w:p>`;
         });
 
         body += `<w:p><w:pPr><w:spacing w:before="80"/>${bdr}</w:pPr></w:p>`;
 
         (em.body || '').split('\n').forEach(line => {
-          body += `<w:p><w:pPr><w:spacing w:after="40"/>${bdr}</w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="22"/><w:color w:val="2C2C2C"/></w:rPr><w:t xml:space="preserve">${escXml(line || ' ')}</w:t></w:r></w:p>`;
+          body += `<w:p><w:pPr><w:spacing w:after="50"/>${bdr}</w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="24"/><w:color w:val="2C2C2C"/></w:rPr><w:t xml:space="preserve">${escXml(line || ' ')}</w:t></w:r></w:p>`;
         });
 
         // Inline images
@@ -1056,8 +1056,8 @@ async function downloadDocx() {
         // Non-image attachments
         const nonImg = em.attachments.filter(a => !a.isImage);
         if (nonImg.length > 0) {
-          body += xmlP('ATTACHMENTS', { font:'Arial', size:16, bold:true, color:'6B7A4F', before:120, after:40 });
-          nonImg.forEach(a => { body += xmlP('  ' + a.filename + ' (' + a.mimeType + (a.size ? ', ' + Math.round(a.size/1024) + 'KB' : '') + ')', { font:'Courier New', size:18, color:'6B7A4F', after:20 }); });
+          body += xmlP('ATTACHMENTS', { font:'Arial', size:20, bold:true, color:'3D4A2A', before:120, after:40 });
+          nonImg.forEach(a => { body += xmlP('  ' + a.filename + ' (' + a.mimeType + (a.size ? ', ' + Math.round(a.size/1024) + 'KB' : '') + ')', { font:'Courier New', size:22, color:'3D4A2A', after:20 }); });
         }
 
         // Links in email — priority first
@@ -1065,18 +1065,18 @@ async function downloadDocx() {
         const docPri = (em.links && em.links.priority) || [];
         const docReg = (em.links && em.links.regular) || [];
         if (docPri.length > 0) {
-          body += xmlP('DOWNLOAD / PRINT', { font:'Arial', size:16, bold:true, color:'D4E157', before:120, after:40 });
-          docPri.forEach(pl => { body += xmlP('  [' + pl.label + ']  ' + pl.url, { font:'Courier New', size:16, color:'6B7A4F', after:20 }); });
+          body += xmlP('DOWNLOAD / PRINT', { font:'Arial', size:20, bold:true, color:'3D4A2A', before:120, after:40 });
+          docPri.forEach(pl => { body += xmlP('  [' + pl.label + ']  ' + pl.url, { font:'Courier New', size:20, color:'3D4A2A', after:20 }); });
         }
         if (docReg.length > 0) {
-          body += xmlP('OTHER LINKS', { font:'Arial', size:16, bold:true, color:'6B7A4F', before:120, after:40 });
-          docReg.forEach(url => { body += xmlP('  ' + url, { font:'Courier New', size:16, color:'6B7A4F', after:20 }); });
+          body += xmlP('OTHER LINKS', { font:'Arial', size:20, bold:true, color:'3D4A2A', before:120, after:40 });
+          docReg.forEach(url => { body += xmlP('  ' + url, { font:'Courier New', size:20, color:'3D4A2A', after:20 }); });
         }
       });
     });
 
     body += '<w:p><w:pPr><w:spacing w:before="400"/></w:pPr></w:p>';
-    body += `<w:p><w:pPr><w:pBdr><w:top w:val="single" w:sz="6" w:color="3D4A2A"/></w:pBdr></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="14"/><w:color w:val="C8C0B4"/></w:rPr><w:t xml:space="preserve">\u25A0  Solidarity of Unbridled Labour  \u00B7  Generated ${escXml(todayStr)}</w:t></w:r></w:p>`;
+    body += `<w:p><w:pPr><w:pBdr><w:top w:val="single" w:sz="6" w:color="3D4A2A"/></w:pBdr></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="18"/><w:color w:val="4A5240"/></w:rPr><w:t xml:space="preserve">\u25A0  Solidarity of Unbridled Labour  \u00B7  Generated ${escXml(todayStr)}</w:t></w:r></w:p>`;
 
     const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" xmlns:mo="http://schemas.microsoft.com/office/mac/office/2008/main" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:w10="urn:schemas-microsoft-com:office:word" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml">
